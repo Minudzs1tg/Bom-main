@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Bomb It Multiplayer Web</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; touch-action: manipulation; }
+    body {
+      margin: 0; background: #222; color: #fff; font-family: sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; overflow: hidden;
+    }
+    #lobby { text-align: center; }
+    #lobby img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; }
+    #game-container { display: none; flex-direction: column; align-items: center; }
+    
+    canvas { border: 4px solid #333; border-radius: 8px; max-width: 90vw; }
+    
+    .controls { display: grid; grid-template-columns: repeat(3, 60px); grid-gap: 10px; margin-top: 15px; }
+    .btn {
+      width: 60px; height: 60px; background: #444; border: none; border-radius: 12px;
+      color: #fff; font-size: 20px; font-weight: bold; display: flex; align-items: center;
+      justify-content: center; user-select: none;
+    }
+    .btn:active { background: #666; }
+    .btn-bomb { background: #e74c3c; grid-column: 2; }
+  </style>
+</head>
+<body>
+
+  <div id="lobby">
+    <h2>Quét mã QR để cùng chơi!</h2>
+    <img id="qr-img" alt="QR Code" />
+    <p>Phòng: <span id="room-display" style="font-weight: bold; color: #f1c40f;"></span></p>
+    <button onclick="startGame()" style="padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer;">Vào Trận</button>
+  </div>
+
+  <div id="game-container">
+    <canvas id="canvas" width="600" height="520"></canvas>
+    
+    <div class="controls">
+      <div></div><button class="btn" onclick="sendMove('up')">▲</button><div></div>
+      <button class="btn" onclick="sendMove('left')">◀</button>
+      <button class="btn btn-bomb" onclick="sendBomb()">💣</button>
+      <button class="btn" onclick="sendMove('right')">▶</button>
+      <div></div><button class="btn" onclick="sendMove('down')">▼</button><div></div>
+    </div>
+  </div>
+
+  <script>
+    // 1. ĐÃ BỔ SUNG: Khai báo đầy đủ 7 hình ảnh (Bao gồm 2 item)
+    const imgWall = new Image(); imgWall.src = '/assets/wall.png';
+    const imgBrick = new Image(); imgBrick.src = '/assets/brick.png';
+    const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
+    const imgPlayer = new Image(); imgPlayer.src = '/assets/player1.png';
+    const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
+    const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
+    const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
+
+    const socket = io();
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomId = urlParams.get('room') || 'PHONG-VUI';
+
+    socket.emit('join_room', { roomId, hostUrl: window.location.origin });
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const CELL_SIZE = 40;
+
+    let gameState = { map: [], players: {}, bombs: [], explosions: [] };
+
+    socket.on('room_state', (data) => {
+      document.getElementById('qr-img').src = data.qrCode;
+      document.getElementById('room-display').innerText = data.roomId;
+      gameState.map = data.map;
+      gameState.players = data.players;
+    });
+
+    socket.on('player_moved', ({ id, x, y }) => {
+      if (gameState.players[id]) {
+        gameState.players[id].x = x;
+        gameState.players[id].y = y;
+      }
+    });
+
+    // 2. ĐÃ BỔ SUNG: Lắng nghe sự kiện cập nhật bản đồ khi có người nhặt Item
+    socket.on('map_updated', (updatedMap) => {
+      gameState.map = updatedMap;
+    });
+
+    socket.on('bomb_placed', (bomb) => {
+      gameState.bombs.push(bomb);
+    });
+
+    socket.on('bomb_exploded', ({ bombId, explosionCells, updatedMap, players }) => {
+      gameState.bombs = gameState.bombs.filter(b => b.id !== bombId);
+      gameState.map = updatedMap;
+      gameState.players = players;
+      gameState.explosions = explosionCells;
+      setTimeout(() => { gameState.explosions = []; }, 400);
+    });
+
+    function sendMove(dir) { socket.emit('move', { roomId, dir }); }
+    function sendBomb() { socket.emit('place_bomb', { roomId }); }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'w') sendMove('up');
+      if (e.key === 'ArrowDown' || e.key === 's') sendMove('down');
+      if (e.key === 'ArrowLeft' || e.key === 'a') sendMove('left');
+      if (e.key === 'ArrowRight' || e.key === 'd') sendMove('right');
+      if (e.key === ' ' || e.key === 'Enter') sendBomb();
+    });
+
+    function startGame() {
+      document.getElementById('lobby').style.display = 'none';
+      document.getElementById('game-container').style.display = 'flex';
+      requestAnimationFrame(render);
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let r = 0; r < gameState.map.length; r++) {
+        for (let c = 0; c < gameState.map[r].length; c++) {
+          const tile = gameState.map[r][c];
+          
+          ctx.drawImage(imgGrass, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          
+          // 3. ĐÃ BỔ SUNG: Logic vẽ Item Tăng Bom (3) và Item Tăng Lửa (4)
+          if (tile === 1) {
+            ctx.drawImage(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          } else if (tile === 2) {
+            ctx.drawImage(imgBrick, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          } else if (tile === 3) {
+            ctx.drawImage(imgItemBomb, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          } else if (tile === 4) {
+            ctx.drawImage(imgItemFire, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          }
+        }
+      }
+
+      gameState.bombs.forEach(b => {
+        ctx.drawImage(imgBomb, b.x * CELL_SIZE, b.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      });
+
+      ctx.fillStyle = 'rgba(255, 118, 117, 0.8)';
+      gameState.explosions.forEach(exp => {
+        ctx.fillRect(exp.x * CELL_SIZE, exp.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      });
+
+      Object.values(gameState.players).forEach(p => {
+        if (!p.alive) return;
+        ctx.drawImage(imgPlayer, p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      });
+
+      requestAnimationFrame(render);
+    }
+  </script>
+</body>
+</html>

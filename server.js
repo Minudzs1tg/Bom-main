@@ -1,0 +1,191 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const QRCode = require('qrcode');
+const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+const rooms = {};
+
+// Khởi tạo bản đồ 15x13 (1: Tường cứng, 2: Gạch mềm, 0: Ô trống, 3: Item Bom, 4: Item Lửa)
+function createMap() {
+  const map = [];
+  for (let r = 0; r < 13; r++) { // Chiều cao: 13 hàng
+    const row = [];
+    for (let c = 0; c < 15; c++) { // Chiều rộng: 15 cột
+      if (r === 0 || r === 12 || c === 0 || c === 14 || (r % 2 === 0 && c % 2 === 0)) {
+        row.push(1); // Tường cứng cố định
+      } else if ((r <= 2 && c <= 2) || (r >= 10 && c >= 12) || (r <= 2 && c >= 12) || (r >= 10 && c <= 2)) {
+        row.push(0); // Để trống 4 góc xuất phát
+      } else {
+        row.push(Math.random() < 0.65 ? 2 : 0); // 65% là gạch mềm
+      }
+    }
+    map.push(row);
+  }
+  return map;
+}
+
+const SPAWN_POINTS = [
+  { x: 1, y: 1, color: '#e74c3c' },   // Góc trên trái
+  { x: 13, y: 11, color: '#3498db' }, // Góc dưới phải
+  { x: 13, y: 1, color: '#2ecc71' },  // Góc trên phải
+  { x: 1, y: 11, color: '#f1c40f' }   // Góc dưới trái
+];
+
+io.on('connection', (socket) => {
+  socket.on('join_room', async ({ roomId, hostUrl }) => {
+    socket.join(roomId);
+
+    if (!rooms[roomId]) {
+      rooms[roomId] = {
+        id: roomId,
+        map: createMap(),
+        players: {},
+        bombs: []
+      };
+    }
+
+    const room = rooms[roomId];
+    const playerIndices = Object.keys(room.players).length;
+
+    if (playerIndices < 4) {
+      const spawn = SPAWN_POINTS[playerIndices];
+      room.players[socket.id] = {
+        id: socket.id,
+        x: spawn.x,
+        y: spawn.y,
+        color: spawn.color,
+        alive: true,
+        bombLimit: 1, // Số bom tối đa đặt cùng lúc
+        bombPower: 1  // Tầm nổ (số ô)
+      };
+    }
+
+    const fullJoinUrl = `${hostUrl}/?room=${roomId}`;
+    const qrDataUrl = await QRCode.toDataURL(fullJoinUrl);
+
+    io.to(roomId).emit('room_state', {
+      players: room.players,
+      map: room.map,
+      qrCode: qrDataUrl,
+      roomId
+    });
+  });
+
+  // Di chuyển nhân vật và nhặt Item
+  socket.on('move', ({ roomId, dir }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id] || !room.players[socket.id].alive) return;
+
+    const p = room.players[socket.id];
+    let nextX = p.x;
+    let nextY = p.y;
+
+    if (dir === 'up') nextY--;
+    if (dir === 'down') nextY++;
+    if (dir === 'left') nextX--;
+    if (dir === 'right') nextX++;
+
+    // Kiểm tra không đi xuyên tường/gạch (0: trống, 3: Bom up, 4: Fire up)
+    if (room.map[nextY] && [0, 3, 4].includes(room.map[nextY][nextX])) {
+      const targetCell = room.map[nextY][nextX];
+      
+      // Xử lý ăn Item
+      if (targetCell === 3 || targetCell === 4) {
+        if (targetCell === 3) p.bombLimit++;
+        if (targetCell === 4) p.bombPower++;
+        
+        room.map[nextY][nextX] = 0; // Xóa item khỏi map
+        io.to(roomId).emit('map_updated', room.map); // Báo các máy khác cập nhật map
+      }
+
+      p.x = nextX;
+      p.y = nextY;
+      io.to(roomId).emit('player_moved', { id: socket.id, x: p.x, y: p.y });
+    }
+  });
+
+  // Đặt bom và kích nổ
+  socket.on('place_bomb', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id] || !room.players[socket.id].alive) return;
+
+    const p = room.players[socket.id];
+    
+    // Chặn đặt bom nếu đã chạm giới hạn
+    const activeBombs = room.bombs.filter(b => b.ownerId === socket.id).length;
+    if (activeBombs >= p.bombLimit) return;
+
+    const bomb = { 
+      x: p.x, 
+      y: p.y, 
+      id: Date.now(), 
+      ownerId: socket.id, 
+      power: p.bombPower 
+    };
+    
+    room.bombs.push(bomb);
+    io.to(roomId).emit('bomb_placed', bomb);
+
+    // Đếm ngược 2.5s nổ
+    setTimeout(() => {
+      // ĐÃ SỬA LỖI: Xóa quả bom khỏi danh sách hiện tại của server khi đếm ngược kết thúc
+      room.bombs = room.bombs.filter(b => b.id !== bomb.id);
+
+      const explosionCells = [{ x: bomb.x, y: bomb.y }];
+      const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+      directions.forEach(([dx, dy]) => {
+        for (let i = 1; i <= bomb.power; i++) {
+          const targetX = bomb.x + dx * i;
+          const targetY = bomb.y + dy * i;
+
+          if (!room.map[targetY] || room.map[targetY][targetX] === 1) break; // Kẹt tường cứng
+
+          explosionCells.push({ x: targetX, y: targetY });
+
+          if (room.map[targetY][targetX] === 2) {
+            // Tỉ lệ 40% rớt đồ (chia đều 20% ra item Bom, 20% ra item Lửa)
+            const randomDrop = Math.random();
+            if (randomDrop < 0.2) room.map[targetY][targetX] = 3;
+            else if (randomDrop < 0.4) room.map[targetY][targetX] = 4;
+            else room.map[targetY][targetX] = 0;
+            
+            break; // Gạch cản tia lửa lại
+          }
+        }
+      });
+
+      Object.values(room.players).forEach((player) => {
+        if (player.alive && explosionCells.some(c => c.x === player.x && c.y === player.y)) {
+          player.alive = false;
+        }
+      });
+
+      io.to(roomId).emit('bomb_exploded', {
+        bombId: bomb.id,
+        explosionCells,
+        updatedMap: room.map,
+        players: room.players
+      });
+    }, 2500);
+  });
+
+  socket.on('disconnect', () => {
+    for (const rId in rooms) {
+      if (rooms[rId].players[socket.id]) {
+        delete rooms[rId].players[socket.id];
+        io.to(rId).emit('player_left', socket.id);
+      }
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server chạy tại: http://localhost:${PORT}`));
