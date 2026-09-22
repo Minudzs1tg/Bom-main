@@ -31,10 +31,10 @@ function createMap() {
 }
 
 const SPAWN_POINTS = [
-  { x: 1, y: 1, color: '#e74c3c' },   // Góc trên trái (Player 1)
-  { x: 13, y: 11, color: '#3498db' }, // Góc dưới phải (Player 2)
-  { x: 13, y: 1, color: '#2ecc71' },  // Góc trên phải (Player 3)
-  { x: 1, y: 11, color: '#f1c40f' }   // Góc dưới trái (Player 4)
+  { x: 1, y: 1, color: '#e74c3c' },   // Player 1
+  { x: 13, y: 11, color: '#3498db' }, // Player 2
+  { x: 13, y: 1, color: '#2ecc71' },  // Player 3
+  { x: 1, y: 11, color: '#f1c40f' }   // Player 4
 ];
 
 io.on('connection', (socket) => {
@@ -46,13 +46,23 @@ io.on('connection', (socket) => {
     }
 
     const room = rooms[roomId];
-    const playerIndices = Object.keys(room.players).length;
 
-    if (playerIndices < 4) {
-      const spawn = SPAWN_POINTS[playerIndices];
+    // CƠ CHẾ TÌM GHẾ TRỐNG ĐỂ KHÔNG BỊ TRÙNG NHAU
+    let assignedNumber = -1;
+    const currentNumbers = Object.values(room.players).map(p => p.playerNumber);
+    for (let i = 1; i <= 4; i++) {
+      if (!currentNumbers.includes(i)) {
+        assignedNumber = i; // Tìm thấy ghế trống
+        break;
+      }
+    }
+
+    // Nếu phòng chưa đầy (còn ghế trống)
+    if (assignedNumber !== -1) {
+      const spawn = SPAWN_POINTS[assignedNumber - 1];
       room.players[socket.id] = {
         id: socket.id,
-        playerNumber: playerIndices + 1, // ĐÁNH SỐ: 1, 2, 3, hoặc 4
+        playerNumber: assignedNumber, // Cấp số chuẩn xác (1, 2, 3 hoặc 4)
         x: spawn.x,
         y: spawn.y,
         startX: spawn.x, 
