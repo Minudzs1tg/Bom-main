@@ -31,10 +31,10 @@ function createMap() {
 }
 
 const SPAWN_POINTS = [
-  { x: 1, y: 1, color: '#e74c3c' },   
-  { x: 13, y: 11, color: '#3498db' }, 
-  { x: 13, y: 1, color: '#2ecc71' },  
-  { x: 1, y: 11, color: '#f1c40f' }   
+  { x: 1, y: 1, color: '#e74c3c' },   // Góc trên trái (Player 1)
+  { x: 13, y: 11, color: '#3498db' }, // Góc dưới phải (Player 2)
+  { x: 13, y: 1, color: '#2ecc71' },  // Góc trên phải (Player 3)
+  { x: 1, y: 11, color: '#f1c40f' }   // Góc dưới trái (Player 4)
 ];
 
 io.on('connection', (socket) => {
@@ -52,6 +52,7 @@ io.on('connection', (socket) => {
       const spawn = SPAWN_POINTS[playerIndices];
       room.players[socket.id] = {
         id: socket.id,
+        playerNumber: playerIndices + 1, // ĐÁNH SỐ: 1, 2, 3, hoặc 4
         x: spawn.x,
         y: spawn.y,
         startX: spawn.x, 
@@ -61,8 +62,8 @@ io.on('connection', (socket) => {
         lives: 3,        
         bombLimit: 1,
         bombPower: 1,
-        bombBuffCharges: 0, // Số lượt buff bom còn lại
-        fireBuffCharges: 0  // Số lượt buff lửa còn lại
+        bombBuffCharges: 0,
+        fireBuffCharges: 0
       };
     }
 
@@ -90,8 +91,8 @@ io.on('connection', (socket) => {
       p.lives = 3;
       p.bombLimit = 1;
       p.bombPower = 1;
-      p.bombBuffCharges = 0; // Reset số lượt buff
-      p.fireBuffCharges = 0; // Reset số lượt buff
+      p.bombBuffCharges = 0;
+      p.fireBuffCharges = 0;
     });
 
     io.to(roomId).emit('game_restarted', {
@@ -117,14 +118,13 @@ io.on('connection', (socket) => {
       const targetCell = room.map[nextY][nextX];
       
       if (targetCell === 3 || targetCell === 4) {
-        // TÍNH NĂNG MỚI: KHÔNG CỘNG DỒN, RESET VỀ 3 LƯỢT
         if (targetCell === 3) {
-          p.bombLimit = 2; // Tối đa chỉ là 2
-          p.bombBuffCharges = 3; // Được 3 lượt dùng
+          p.bombLimit = 2; 
+          p.bombBuffCharges = 3; 
         }
         if (targetCell === 4) {
-          p.bombPower = 2; // Tối đa chỉ là 2
-          p.fireBuffCharges = 3; // Được 3 lượt dùng
+          p.bombPower = 2; 
+          p.fireBuffCharges = 3; 
         }
         
         room.map[nextY][nextX] = 0; 
@@ -150,18 +150,16 @@ io.on('connection', (socket) => {
     room.bombs.push(bomb);
     io.to(roomId).emit('bomb_placed', bomb);
 
-    // TÍNH NĂNG MỚI: TRỪ LƯỢT BUFF MỖI KHI ĐẶT BOM
     if (p.bombBuffCharges > 0) {
       p.bombBuffCharges--;
-      if (p.bombBuffCharges <= 0) p.bombLimit = 1; // Hết 3 lượt -> Trở về mặc định 1
+      if (p.bombBuffCharges <= 0) p.bombLimit = 1; 
     }
     
     if (p.fireBuffCharges > 0) {
       p.fireBuffCharges--;
-      if (p.fireBuffCharges <= 0) p.bombPower = 1; // Hết 3 lượt -> Trở về mặc định 1
+      if (p.fireBuffCharges <= 0) p.bombPower = 1; 
     }
 
-    // Báo cho client cập nhật lại số lượt hiển thị trên thanh HUD
     io.to(roomId).emit('player_updated', p); 
 
     setTimeout(() => {

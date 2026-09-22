@@ -53,9 +53,7 @@
 
   <div id="game-container">
     <div id="hud">
-      <div id="hud-stats">
-        <!-- Chờ load dữ liệu JavaScript -->
-      </div>
+      <div id="hud-stats"></div>
       <button class="btn-restart" onclick="sendRestart()">🔄 Chơi Lại</button>
     </div>
 
@@ -74,10 +72,15 @@
     const imgWall = new Image(); imgWall.src = '/assets/wall.png';
     const imgBrick = new Image(); imgBrick.src = '/assets/brick.png';
     const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
-    const imgPlayer = new Image(); imgPlayer.src = '/assets/player1.png';
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
     const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
+
+    // LOAD 4 HÌNH ẢNH CỦA 4 NGƯỜI CHƠI
+    const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
+    const imgPlayer2 = new Image(); imgPlayer2.src = '/assets/player2.png';
+    const imgPlayer3 = new Image(); imgPlayer3.src = '/assets/player3.png';
+    const imgPlayer4 = new Image(); imgPlayer4.src = '/assets/player4.png';
 
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
@@ -91,7 +94,6 @@
 
     let gameState = { map: [], players: {}, bombs: [], explosions: [] };
 
-    // Cập nhật giao diện HUD (Thêm số lượt trong ngoặc)
     function updateHUD() {
       const myPlayer = gameState.players[socket.id];
       if (myPlayer) {
@@ -203,9 +205,16 @@
         ctx.fillRect(exp.x * CELL_SIZE, exp.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
+      // VẼ NHÂN VẬT DỰA TRÊN playerNumber
       Object.values(gameState.players).forEach(p => {
         if (!p.alive) return;
-        ctx.drawImage(imgPlayer, p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        
+        let currentPlayerImg = imgPlayer1; // Mặc định là player 1
+        if (p.playerNumber === 2) currentPlayerImg = imgPlayer2;
+        if (p.playerNumber === 3) currentPlayerImg = imgPlayer3;
+        if (p.playerNumber === 4) currentPlayerImg = imgPlayer4;
+
+        ctx.drawImage(currentPlayerImg, p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
       requestAnimationFrame(render);
