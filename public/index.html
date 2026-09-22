@@ -1,4 +1,4 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -74,8 +74,7 @@
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
     const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
-
-    // ĐÃ SỬA: Load 1 tấm ảnh background lớn thay vì ảnh cỏ nhỏ
+    
     const imgBackground = new Image(); imgBackground.src = '/assets/background.png';
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
@@ -177,31 +176,35 @@
       requestAnimationFrame(render);
     }
 
+    // HÀM BẢO VỆ CHỐNG SẬP GAME KHI MẤT HÌNH
+    function drawSafe(img, x, y, w, h) {
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, x, y, w, h);
+      } else {
+        // Vẽ mảng màu dự phòng nếu ảnh lỗi (Xanh dương cho nền, đỏ cho nhân vật/vật cản)
+        ctx.fillStyle = (img === imgBackground) ? '#2d98da' : '#e84118';
+        ctx.fillRect(x, y, w, h);
+      }
+    }
+
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. ĐÃ SỬA: Vẽ một background lớn lấp đầy toàn bộ kích thước sân chơi (600x520)
-      ctx.drawImage(imgBackground, 0, 0, canvas.width, canvas.height);
+      drawSafe(imgBackground, 0, 0, canvas.width, canvas.height);
 
-      // 2. Chỉ vẽ tường, gạch và vật phẩm đè lên nền
       for (let r = 0; r < gameState.map.length; r++) {
         for (let c = 0; c < gameState.map[r].length; c++) {
           const tile = gameState.map[r][c];
           
-          if (tile === 1) {
-            ctx.drawImage(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-          } else if (tile === 2) {
-            ctx.drawImage(imgBrick, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-          } else if (tile === 3) {
-            ctx.drawImage(imgItemBomb, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-          } else if (tile === 4) {
-            ctx.drawImage(imgItemFire, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-          }
+          if (tile === 1) drawSafe(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          else if (tile === 2) drawSafe(imgBrick, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          else if (tile === 3) drawSafe(imgItemBomb, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          else if (tile === 4) drawSafe(imgItemFire, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         }
       }
 
       gameState.bombs.forEach(b => {
-        ctx.drawImage(imgBomb, b.x * CELL_SIZE, b.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        drawSafe(imgBomb, b.x * CELL_SIZE, b.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
       ctx.fillStyle = 'rgba(255, 118, 117, 0.8)';
@@ -217,7 +220,7 @@
         if (p.playerNumber === 3) currentPlayerImg = imgPlayer3;
         if (p.playerNumber === 4) currentPlayerImg = imgPlayer4;
 
-        ctx.drawImage(currentPlayerImg, p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        drawSafe(currentPlayerImg, p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
       requestAnimationFrame(render);
