@@ -18,10 +18,17 @@
     
     /* Giao diện thanh trạng thái (HUD) */
     #hud {
-      display: flex; width: 100%; justify-content: space-around;
-      background: #444; padding: 12px; border-radius: 8px; margin-bottom: 10px;
-      font-size: 22px; font-weight: bold; border: 3px solid #333;
+      display: flex; width: 100%; justify-content: space-between; align-items: center;
+      background: #444; padding: 12px 15px; border-radius: 8px; margin-bottom: 10px;
+      font-size: 20px; font-weight: bold; border: 3px solid #333;
     }
+    #hud-stats { display: flex; gap: 15px; }
+    
+    .btn-restart {
+      background: #00b894; color: white; border: none; padding: 8px 12px;
+      border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
+    }
+    .btn-restart:active { background: #00cec9; }
     
     canvas { border: 4px solid #333; border-radius: 8px; max-width: 90vw; }
     
@@ -47,9 +54,12 @@
   <div id="game-container">
     <!-- Thanh trạng thái HUD -->
     <div id="hud">
-      <div>❤️ <span id="hud-lives">3</span></div>
-      <div>💣 <span id="hud-bombs">1</span></div>
-      <div>🔥 <span id="hud-power">1</span></div>
+      <div id="hud-stats">
+        <div>❤️ <span id="hud-lives">3</span></div>
+        <div>💣 <span id="hud-bombs">1</span></div>
+        <div>🔥 <span id="hud-power">1</span></div>
+      </div>
+      <button class="btn-restart" onclick="sendRestart()">🔄 Chơi Lại</button>
     </div>
 
     <canvas id="canvas" width="600" height="520"></canvas>
@@ -84,16 +94,17 @@
 
     let gameState = { map: [], players: {}, bombs: [], explosions: [] };
 
-    // Hàm cập nhật chữ trên thanh HUD
     function updateHUD() {
       const myPlayer = gameState.players[socket.id];
       if (myPlayer) {
         if (myPlayer.alive) {
-          document.getElementById('hud-lives').innerText = myPlayer.lives;
-          document.getElementById('hud-bombs').innerText = myPlayer.bombLimit;
-          document.getElementById('hud-power').innerText = myPlayer.bombPower;
+          document.getElementById('hud-stats').innerHTML = `
+            <div>❤️ <span id="hud-lives">${myPlayer.lives}</span></div>
+            <div>💣 <span id="hud-bombs">${myPlayer.bombLimit}</span></div>
+            <div>🔥 <span id="hud-power">${myPlayer.bombPower}</span></div>
+          `;
         } else {
-          document.getElementById('hud').innerHTML = "<div style='color:#ff7675; width:100%; text-align:center;'>💀 ĐÃ TỬ TRẬN 💀</div>";
+          document.getElementById('hud-stats').innerHTML = "<div style='color:#ff7675;'>💀 ĐÃ TỬ TRẬN</div>";
         }
       }
     }
@@ -103,7 +114,16 @@
       document.getElementById('room-display').innerText = data.roomId;
       gameState.map = data.map;
       gameState.players = data.players;
-      updateHUD(); // Cập nhật ngay khi vào
+      updateHUD();
+    });
+
+    // NHẬN SỰ KIỆN TẠO LẠI TRẬN MỚI
+    socket.on('game_restarted', (data) => {
+      gameState.map = data.map;
+      gameState.players = data.players;
+      gameState.bombs = [];       // Xóa sạch bom cũ nếu còn
+      gameState.explosions = [];  // Tắt các tia lửa dở dang
+      updateHUD();                // Vẽ lại máu và đồ
     });
 
     socket.on('player_moved', ({ id, x, y }) => {
@@ -113,7 +133,6 @@
       }
     });
 
-    // Cập nhật HUD khi bản thân nhặt đồ
     socket.on('player_updated', (updatedPlayer) => {
       gameState.players[updatedPlayer.id] = updatedPlayer;
       if (updatedPlayer.id === socket.id) updateHUD();
@@ -132,12 +151,15 @@
       gameState.map = updatedMap;
       gameState.players = players;
       gameState.explosions = explosionCells;
-      updateHUD(); // Cập nhật lỡ như bị mất mạng
+      updateHUD(); 
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
     function sendMove(dir) { socket.emit('move', { roomId, dir }); }
     function sendBomb() { socket.emit('place_bomb', { roomId }); }
+    
+    // GỬI LỆNH TẠO LẠI TRẬN
+    function sendRestart() { socket.emit('restart_game', { roomId }); }
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowUp' || e.key === 'w') sendMove('up');

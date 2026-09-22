@@ -32,10 +32,10 @@ function createMap() {
 }
 
 const SPAWN_POINTS = [
-  { x: 1, y: 1, color: '#e74c3c' },   // Góc trên trái
-  { x: 13, y: 11, color: '#3498db' }, // Góc dưới phải
-  { x: 13, y: 1, color: '#2ecc71' },  // Góc trên phải
-  { x: 1, y: 11, color: '#f1c40f' }   // Góc dưới trái
+  { x: 1, y: 1, color: '#e74c3c' },   
+  { x: 13, y: 11, color: '#3498db' }, 
+  { x: 13, y: 1, color: '#2ecc71' },  
+  { x: 1, y: 11, color: '#f1c40f' }   
 ];
 
 io.on('connection', (socket) => {
@@ -55,11 +55,11 @@ io.on('connection', (socket) => {
         id: socket.id,
         x: spawn.x,
         y: spawn.y,
-        startX: spawn.x, // Lưu vị trí gốc để hồi sinh
+        startX: spawn.x, 
         startY: spawn.y,
         color: spawn.color,
         alive: true,
-        lives: 3,        // Cấp 3 mạng mặc định
+        lives: 3,        
         bombLimit: 1,
         bombPower: 1
       };
@@ -73,6 +73,32 @@ io.on('connection', (socket) => {
       map: room.map,
       qrCode: qrDataUrl,
       roomId
+    });
+  });
+
+  // TÍNH NĂNG TẠO LẠI TRẬN MỚI
+  socket.on('restart_game', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    // 1. Tạo lại map mới tinh
+    room.map = createMap();
+    // 2. Xóa sạch bom cũ
+    room.bombs = [];
+    // 3. Phục hồi 100% sinh lực và đồ cho mọi người chơi
+    Object.values(room.players).forEach(p => {
+      p.x = p.startX;
+      p.y = p.startY;
+      p.alive = true;
+      p.lives = 3;
+      p.bombLimit = 1;
+      p.bombPower = 1;
+    });
+
+    // 4. Phát lệnh làm mới cho toàn bộ máy trong phòng
+    io.to(roomId).emit('game_restarted', {
+      map: room.map,
+      players: room.players
     });
   });
 
@@ -98,7 +124,7 @@ io.on('connection', (socket) => {
         
         room.map[nextY][nextX] = 0; 
         io.to(roomId).emit('map_updated', room.map); 
-        io.to(roomId).emit('player_updated', p); // Gửi thông tin để cập nhật HUD
+        io.to(roomId).emit('player_updated', p); 
       }
 
       p.x = nextX;
@@ -142,15 +168,14 @@ io.on('connection', (socket) => {
         }
       });
 
-      // LÔ-GÍC HỒI SINH
       Object.values(room.players).forEach((player) => {
         if (player.alive && explosionCells.some(c => c.x === player.x && c.y === player.y)) {
-          player.lives--; // Bị trúng bom -> Trừ 1 mạng
+          player.lives--;
           if (player.lives > 0) {
-            player.x = player.startX; // Đưa về vị trí xuất phát
+            player.x = player.startX;
             player.y = player.startY;
           } else {
-            player.alive = false; // Hết mạng -> Chết hẳn
+            player.alive = false;
           }
         }
       });
