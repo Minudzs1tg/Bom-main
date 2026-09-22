@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+\<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -71,12 +71,13 @@
   <script>
     const imgWall = new Image(); imgWall.src = '/assets/wall.png';
     const imgBrick = new Image(); imgBrick.src = '/assets/brick.png';
-    const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
     const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
 
-    // LOAD 4 HÌNH ẢNH CỦA 4 NGƯỜI CHƠI
+    // ĐÃ SỬA: Load 1 tấm ảnh background lớn thay vì ảnh cỏ nhỏ
+    const imgBackground = new Image(); imgBackground.src = '/assets/background.png';
+
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
     const imgPlayer2 = new Image(); imgPlayer2.src = '/assets/player2.png';
     const imgPlayer3 = new Image(); imgPlayer3.src = '/assets/player3.png';
@@ -179,10 +180,13 @@
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // 1. ĐÃ SỬA: Vẽ một background lớn lấp đầy toàn bộ kích thước sân chơi (600x520)
+      ctx.drawImage(imgBackground, 0, 0, canvas.width, canvas.height);
+
+      // 2. Chỉ vẽ tường, gạch và vật phẩm đè lên nền
       for (let r = 0; r < gameState.map.length; r++) {
         for (let c = 0; c < gameState.map[r].length; c++) {
           const tile = gameState.map[r][c];
-          ctx.drawImage(imgGrass, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           
           if (tile === 1) {
             ctx.drawImage(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
@@ -205,11 +209,10 @@
         ctx.fillRect(exp.x * CELL_SIZE, exp.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
-      // VẼ NHÂN VẬT DỰA TRÊN playerNumber
       Object.values(gameState.players).forEach(p => {
         if (!p.alive) return;
         
-        let currentPlayerImg = imgPlayer1; // Mặc định là player 1
+        let currentPlayerImg = imgPlayer1;
         if (p.playerNumber === 2) currentPlayerImg = imgPlayer2;
         if (p.playerNumber === 3) currentPlayerImg = imgPlayer3;
         if (p.playerNumber === 4) currentPlayerImg = imgPlayer4;
