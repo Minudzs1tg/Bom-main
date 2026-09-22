@@ -75,7 +75,8 @@
     const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
     
-    const imgBackground = new Image(); imgBackground.src = '/assets/background.png';
+    // HOÀN TÁC: Trở về dùng ảnh ô cỏ gốc
+    const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
     const imgPlayer2 = new Image(); imgPlayer2.src = '/assets/player2.png';
@@ -176,13 +177,12 @@
       requestAnimationFrame(render);
     }
 
-    // HÀM BẢO VỆ CHỐNG SẬP GAME KHI MẤT HÌNH
     function drawSafe(img, x, y, w, h) {
       if (img && img.complete && img.naturalWidth > 0) {
         ctx.drawImage(img, x, y, w, h);
       } else {
-        // Vẽ mảng màu dự phòng nếu ảnh lỗi (Xanh dương cho nền, đỏ cho nhân vật/vật cản)
-        ctx.fillStyle = (img === imgBackground) ? '#2d98da' : '#e84118';
+        // Đổ màu xanh lá mạ dự phòng nếu thiếu ảnh grass.png
+        ctx.fillStyle = (img === imgGrass) ? '#78e08f' : '#e84118';
         ctx.fillRect(x, y, w, h);
       }
     }
@@ -190,11 +190,12 @@
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      drawSafe(imgBackground, 0, 0, canvas.width, canvas.height);
-
       for (let r = 0; r < gameState.map.length; r++) {
         for (let c = 0; c < gameState.map[r].length; c++) {
           const tile = gameState.map[r][c];
+          
+          // HOÀN TÁC: Vẽ cỏ từng ô (Sử dụng drawSafe)
+          drawSafe(imgGrass, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           
           if (tile === 1) drawSafe(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 2) drawSafe(imgBrick, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
