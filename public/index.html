@@ -16,13 +16,13 @@
     #lobby img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; }
     #game-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 600px; }
     
-    /* Giao diện thanh trạng thái (HUD) */
     #hud {
       display: flex; width: 100%; justify-content: space-between; align-items: center;
       background: #444; padding: 12px 15px; border-radius: 8px; margin-bottom: 10px;
       font-size: 20px; font-weight: bold; border: 3px solid #333;
     }
     #hud-stats { display: flex; gap: 15px; }
+    .buff-count { font-size: 13px; color: #55efc4; margin-left: 2px; }
     
     .btn-restart {
       background: #00b894; color: white; border: none; padding: 8px 12px;
@@ -52,12 +52,9 @@
   </div>
 
   <div id="game-container">
-    <!-- Thanh trạng thái HUD -->
     <div id="hud">
       <div id="hud-stats">
-        <div>❤️ <span id="hud-lives">3</span></div>
-        <div>💣 <span id="hud-bombs">1</span></div>
-        <div>🔥 <span id="hud-power">1</span></div>
+        <!-- Chờ load dữ liệu JavaScript -->
       </div>
       <button class="btn-restart" onclick="sendRestart()">🔄 Chơi Lại</button>
     </div>
@@ -94,14 +91,18 @@
 
     let gameState = { map: [], players: {}, bombs: [], explosions: [] };
 
+    // Cập nhật giao diện HUD (Thêm số lượt trong ngoặc)
     function updateHUD() {
       const myPlayer = gameState.players[socket.id];
       if (myPlayer) {
         if (myPlayer.alive) {
+          const bombCharge = myPlayer.bombBuffCharges > 0 ? `<span class="buff-count">(${myPlayer.bombBuffCharges})</span>` : '';
+          const fireCharge = myPlayer.fireBuffCharges > 0 ? `<span class="buff-count">(${myPlayer.fireBuffCharges})</span>` : '';
+
           document.getElementById('hud-stats').innerHTML = `
-            <div>❤️ <span id="hud-lives">${myPlayer.lives}</span></div>
-            <div>💣 <span id="hud-bombs">${myPlayer.bombLimit}</span></div>
-            <div>🔥 <span id="hud-power">${myPlayer.bombPower}</span></div>
+            <div>❤️ <span>${myPlayer.lives}</span></div>
+            <div>💣 <span>${myPlayer.bombLimit}</span>${bombCharge}</div>
+            <div>🔥 <span>${myPlayer.bombPower}</span>${fireCharge}</div>
           `;
         } else {
           document.getElementById('hud-stats').innerHTML = "<div style='color:#ff7675;'>💀 ĐÃ TỬ TRẬN</div>";
@@ -117,13 +118,12 @@
       updateHUD();
     });
 
-    // NHẬN SỰ KIỆN TẠO LẠI TRẬN MỚI
     socket.on('game_restarted', (data) => {
       gameState.map = data.map;
       gameState.players = data.players;
-      gameState.bombs = [];       // Xóa sạch bom cũ nếu còn
-      gameState.explosions = [];  // Tắt các tia lửa dở dang
-      updateHUD();                // Vẽ lại máu và đồ
+      gameState.bombs = [];       
+      gameState.explosions = [];  
+      updateHUD();                
     });
 
     socket.on('player_moved', ({ id, x, y }) => {
@@ -157,8 +157,6 @@
 
     function sendMove(dir) { socket.emit('move', { roomId, dir }); }
     function sendBomb() { socket.emit('place_bomb', { roomId }); }
-    
-    // GỬI LỆNH TẠO LẠI TRẬN
     function sendRestart() { socket.emit('restart_game', { roomId }); }
 
     window.addEventListener('keydown', (e) => {
