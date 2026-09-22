@@ -14,7 +14,14 @@
     }
     #lobby { text-align: center; }
     #lobby img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; }
-    #game-container { display: none; flex-direction: column; align-items: center; }
+    #game-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 600px; }
+    
+    /* Giao diện thanh trạng thái (HUD) */
+    #hud {
+      display: flex; width: 100%; justify-content: space-around;
+      background: #444; padding: 12px; border-radius: 8px; margin-bottom: 10px;
+      font-size: 22px; font-weight: bold; border: 3px solid #333;
+    }
     
     canvas { border: 4px solid #333; border-radius: 8px; max-width: 90vw; }
     
@@ -22,7 +29,7 @@
     .btn {
       width: 60px; height: 60px; background: #444; border: none; border-radius: 12px;
       color: #fff; font-size: 20px; font-weight: bold; display: flex; align-items: center;
-      justify-content: center; user-select: none;
+      justify-content: center; user-select: none; cursor: pointer;
     }
     .btn:active { background: #666; }
     .btn-bomb { background: #e74c3c; grid-column: 2; }
@@ -34,10 +41,17 @@
     <h2>Quét mã QR để cùng chơi!</h2>
     <img id="qr-img" alt="QR Code" />
     <p>Phòng: <span id="room-display" style="font-weight: bold; color: #f1c40f;"></span></p>
-    <button onclick="startGame()" style="padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer;">Vào Trận</button>
+    <button onclick="startGame()" style="padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; background: #0984e3; color: white; border: none;">Vào Trận</button>
   </div>
 
   <div id="game-container">
+    <!-- Thanh trạng thái HUD -->
+    <div id="hud">
+      <div>❤️ <span id="hud-lives">3</span></div>
+      <div>💣 <span id="hud-bombs">1</span></div>
+      <div>🔥 <span id="hud-power">1</span></div>
+    </div>
+
     <canvas id="canvas" width="600" height="520"></canvas>
     
     <div class="controls">
@@ -50,7 +64,6 @@
   </div>
 
   <script>
-    // 1. ĐÃ BỔ SUNG: Khai báo đầy đủ 7 hình ảnh (Bao gồm 2 item)
     const imgWall = new Image(); imgWall.src = '/assets/wall.png';
     const imgBrick = new Image(); imgBrick.src = '/assets/brick.png';
     const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
@@ -71,11 +84,26 @@
 
     let gameState = { map: [], players: {}, bombs: [], explosions: [] };
 
+    // Hàm cập nhật chữ trên thanh HUD
+    function updateHUD() {
+      const myPlayer = gameState.players[socket.id];
+      if (myPlayer) {
+        if (myPlayer.alive) {
+          document.getElementById('hud-lives').innerText = myPlayer.lives;
+          document.getElementById('hud-bombs').innerText = myPlayer.bombLimit;
+          document.getElementById('hud-power').innerText = myPlayer.bombPower;
+        } else {
+          document.getElementById('hud').innerHTML = "<div style='color:#ff7675; width:100%; text-align:center;'>💀 ĐÃ TỬ TRẬN 💀</div>";
+        }
+      }
+    }
+
     socket.on('room_state', (data) => {
       document.getElementById('qr-img').src = data.qrCode;
       document.getElementById('room-display').innerText = data.roomId;
       gameState.map = data.map;
       gameState.players = data.players;
+      updateHUD(); // Cập nhật ngay khi vào
     });
 
     socket.on('player_moved', ({ id, x, y }) => {
@@ -85,7 +113,12 @@
       }
     });
 
-    // 2. ĐÃ BỔ SUNG: Lắng nghe sự kiện cập nhật bản đồ khi có người nhặt Item
+    // Cập nhật HUD khi bản thân nhặt đồ
+    socket.on('player_updated', (updatedPlayer) => {
+      gameState.players[updatedPlayer.id] = updatedPlayer;
+      if (updatedPlayer.id === socket.id) updateHUD();
+    });
+
     socket.on('map_updated', (updatedMap) => {
       gameState.map = updatedMap;
     });
@@ -99,6 +132,7 @@
       gameState.map = updatedMap;
       gameState.players = players;
       gameState.explosions = explosionCells;
+      updateHUD(); // Cập nhật lỡ như bị mất mạng
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
@@ -116,6 +150,7 @@
     function startGame() {
       document.getElementById('lobby').style.display = 'none';
       document.getElementById('game-container').style.display = 'flex';
+      updateHUD();
       requestAnimationFrame(render);
     }
 
@@ -125,10 +160,8 @@
       for (let r = 0; r < gameState.map.length; r++) {
         for (let c = 0; c < gameState.map[r].length; c++) {
           const tile = gameState.map[r][c];
-          
           ctx.drawImage(imgGrass, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           
-          // 3. ĐÃ BỔ SUNG: Logic vẽ Item Tăng Bom (3) và Item Tăng Lửa (4)
           if (tile === 1) {
             ctx.drawImage(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           } else if (tile === 2) {
