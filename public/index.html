@@ -29,11 +29,11 @@
     #hud {
       display: flex; width: 100%; justify-content: space-between; align-items: center;
       background: #444; padding: 10px 15px; border-radius: 8px; margin-bottom: 10px;
-      font-size: 18px; font-weight: bold; border: 3px solid #333;
+      font-size: 16px; font-weight: bold; border: 3px solid #333;
     }
-    #hud-stats { display: flex; gap: 15px; }
-    .buff-count { font-size: 13px; color: #55efc4; margin-left: 2px; }
-    #hud-room-code { font-size: 14px; color: #f1c40f; text-align: center; }
+    #hud-stats { display: flex; gap: 10px; }
+    .buff-count { font-size: 12px; color: #55efc4; margin-left: 2px; }
+    #hud-room-code { font-size: 13px; color: #f1c40f; text-align: center; }
     
     .btn-restart {
       background: #00b894; color: white; border: none; padding: 6px 10px;
@@ -43,15 +43,16 @@
     
     canvas { border: 4px solid #333; border-radius: 8px; max-width: 90vw; }
     
-    .controls { display: grid; grid-template-columns: repeat(3, 60px); grid-gap: 10px; margin-top: 15px; }
+    .controls { display: grid; grid-template-columns: repeat(4, 50px); grid-gap: 8px; margin-top: 10px; justify-content: center; }
     .btn {
-      width: 60px; height: 60px; background: #444; border: none; border-radius: 12px;
-      color: #fff; font-size: 20px; font-weight: bold; display: flex; align-items: center;
+      width: 50px; height: 50px; background: #444; border: none; border-radius: 10px;
+      color: #fff; font-size: 18px; font-weight: bold; display: flex; align-items: center;
       justify-content: center; user-select: none; cursor: pointer;
     }
     .btn:active { background: #666; }
     .btn-bomb { background: #e74c3c; grid-column: 2; }
-    .btn-shoot { background: #0984e3; font-size: 24px; }
+    .btn-shoot { background: #0984e3; font-size: 20px; }
+    .btn-mine { background: #9b59b6; font-size: 20px; } /* Nút gài mìn màu tím */
   </style>
 </head>
 <body>
@@ -83,11 +84,12 @@
     
     <div class="controls">
       <div></div><button class="btn" onclick="sendMove('up')">▲</button><div></div>
+      <button class="btn btn-mine" onclick="sendMine()">🔘</button>
       <button class="btn" onclick="sendMove('left')">◀</button>
       <button class="btn btn-bomb" onclick="sendBomb()">💣</button>
       <button class="btn" onclick="sendMove('right')">▶</button>
-      <div></div><button class="btn" onclick="sendMove('down')">▼</button>
       <button class="btn btn-shoot" onclick="sendShoot()">⚡</button>
+      <div></div><button class="btn" onclick="sendMove('down')">▼</button><div></div>
     </div>
   </div>
 
@@ -100,6 +102,10 @@
     const imgItemGun = new Image(); imgItemGun.src = '/assets/item-gun.png';
     const imgLaser = new Image(); imgLaser.src = '/assets/laser.png'; 
     const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
+    
+    // ẢNH CHO MÌN
+    const imgItemMine = new Image(); imgItemMine.src = '/assets/item-mine.png'; // Rớt ra để ăn
+    const imgTrapMine = new Image(); imgTrapMine.src = '/assets/trap-mine.png'; // Mìn nằm trên đất
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
     const imgPlayer2 = new Image(); imgPlayer2.src = '/assets/player2.png';
@@ -143,8 +149,7 @@
     const ctx = canvas.getContext('2d');
     const CELL_SIZE = 40;
 
-    // THÊM: Biến laserDir để lưu hướng xoay
-    let gameState = { map: [], players: {}, bombs: [], explosions: [], lasers: [], laserDir: 'down' };
+    let gameState = { map: [], players: {}, bombs: [], explosions: [], lasers: [], mines: [], laserDir: 'down' };
 
     function updateHUD() {
       const myPlayer = gameState.players[socket.id];
@@ -154,10 +159,11 @@
           const fireCharge = myPlayer.fireBuffCharges > 0 ? `<span class="buff-count">(${myPlayer.fireBuffCharges})</span>` : '';
 
           document.getElementById('hud-stats').innerHTML = `
-            <div>❤️ <span>${myPlayer.lives}</span></div>
-            <div>💣 <span>${myPlayer.bombLimit}</span>${bombCharge}</div>
-            <div>🔥 <span>${myPlayer.bombPower}</span>${fireCharge}</div>
-            <div style="color:#00cec9;">⚡ <span>${myPlayer.hasElectricGun}</span></div>
+            <div>❤️<span>${myPlayer.lives}</span></div>
+            <div>💣<span>${myPlayer.bombLimit}</span>${bombCharge}</div>
+            <div>🔥<span>${myPlayer.bombPower}</span>${fireCharge}</div>
+            <div style="color:#00cec9;">⚡<span>${myPlayer.hasElectricGun}</span></div>
+            <div style="color:#9b59b6;">🔘<span>${myPlayer.hasMine}</span></div>
           `;
         } else {
           document.getElementById('hud-stats').innerHTML = "<div style='color:#ff7675;'>💀 TỬ TRẬN</div>";
@@ -171,12 +177,14 @@
       document.getElementById('hud-room-id').innerText = data.roomId;
       gameState.map = data.map;
       gameState.players = data.players;
+      gameState.mines = data.mines || [];
       updateHUD();
     });
 
     socket.on('game_restarted', (data) => {
       gameState.map = data.map;
       gameState.players = data.players;
+      gameState.mines = data.mines || [];
       gameState.bombs = [];       
       gameState.explosions = [];
       gameState.lasers = [];
@@ -198,16 +206,29 @@
       gameState.bombs.push(bomb);
     });
 
-    socket.on('bomb_exploded', ({ bombId, explosionCells, updatedMap, players }) => {
+    socket.on('bomb_exploded', ({ bombId, explosionCells, updatedMap, players, mines }) => {
       gameState.bombs = gameState.bombs.filter(b => b.id !== bombId);
       gameState.map = updatedMap;
       gameState.players = players;
+      gameState.mines = mines;
       gameState.explosions = explosionCells;
       updateHUD(); 
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
-    // CẬP NHẬT: Nhận hướng bắn và lưu vào gameState
+    // MÌN ĐƯỢC ĐẶT / NỔ
+    socket.on('mine_placed', (mine) => {
+      gameState.mines.push(mine);
+    });
+
+    socket.on('mine_exploded', ({ explosionCells, players, mines }) => {
+      gameState.players = players;
+      gameState.mines = mines;
+      gameState.explosions = explosionCells;
+      updateHUD();
+      setTimeout(() => { gameState.explosions = []; }, 400);
+    });
+
     socket.on('laser_fired', ({ laserCells, direction, players }) => {
       gameState.players = players;
       gameState.lasers = laserCells;
@@ -219,6 +240,7 @@
     function sendMove(dir) { socket.emit('move', { roomId, dir }); }
     function sendBomb() { socket.emit('place_bomb', { roomId }); }
     function sendShoot() { socket.emit('shoot_gun', { roomId }); } 
+    function sendMine() { socket.emit('place_mine', { roomId }); } // GÀI MÌN
     function sendRestart() { socket.emit('restart_game', { roomId }); }
 
     window.addEventListener('keydown', (e) => {
@@ -228,6 +250,7 @@
       if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') sendMove('right');
       if (e.key === ' ' || e.key === 'Enter') sendBomb();
       if (e.key === 'e' || e.key === 'E') sendShoot();
+      if (e.key === 'q' || e.key === 'Q') sendMine(); // Phím Q để gài mìn
     });
 
     function startGame() {
@@ -244,6 +267,7 @@
         let color = '#e84118';
         if (img === imgGrass) color = '#78e08f';
         else if (img === imgItemGun) color = '#00cec9';
+        else if (img === imgItemMine || img === imgTrapMine) color = '#9b59b6'; // Mìn màu tím
         
         ctx.fillStyle = color;
         ctx.fillRect(x, y, w, h);
@@ -291,8 +315,14 @@
           else if (tile === 3) drawSafe(imgItemBomb, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 4) drawSafe(imgItemFire, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 5) drawSafe(imgItemGun, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
+          else if (tile === 6) drawSafe(imgItemMine, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); // Vẽ hộp mìn rớt ra
         }
       }
+
+      // VẼ MÌN GÀI TRÊN ĐẤT
+      gameState.mines.forEach(m => {
+        drawSafe(imgTrapMine, m.x * CELL_SIZE, m.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      });
 
       gameState.bombs.forEach(b => {
         drawSafe(imgBomb, b.x * CELL_SIZE, b.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
@@ -303,7 +333,6 @@
         ctx.fillRect(exp.x * CELL_SIZE, exp.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
-      // CẬP NHẬT: Vẽ laze có hỗ trợ xoay ảnh 90 độ
       gameState.lasers.forEach(cell => {
         const cx = cell.x * CELL_SIZE + CELL_SIZE / 2;
         const cy = cell.y * CELL_SIZE + CELL_SIZE / 2;
@@ -311,7 +340,6 @@
         ctx.save();
         ctx.translate(cx, cy);
 
-        // Xoay ảnh 90 độ nếu bắn dọc
         if (gameState.laserDir === 'up' || gameState.laserDir === 'down') {
           ctx.rotate(Math.PI / 2);
         }
