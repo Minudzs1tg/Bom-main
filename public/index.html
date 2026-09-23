@@ -98,10 +98,7 @@
     const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
     const imgItemGun = new Image(); imgItemGun.src = '/assets/item-gun.png';
-    
-    // KHAI BÁO HÌNH ẢNH TIA ĐIỆN MỚI
     const imgLaser = new Image(); imgLaser.src = '/assets/laser.png'; 
-    
     const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
@@ -146,7 +143,8 @@
     const ctx = canvas.getContext('2d');
     const CELL_SIZE = 40;
 
-    let gameState = { map: [], players: {}, bombs: [], explosions: [], lasers: [] };
+    // THÊM: Biến laserDir để lưu hướng xoay
+    let gameState = { map: [], players: {}, bombs: [], explosions: [], lasers: [], laserDir: 'down' };
 
     function updateHUD() {
       const myPlayer = gameState.players[socket.id];
@@ -209,9 +207,11 @@
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
-    socket.on('laser_fired', ({ laserCells, players }) => {
+    // CẬP NHẬT: Nhận hướng bắn và lưu vào gameState
+    socket.on('laser_fired', ({ laserCells, direction, players }) => {
       gameState.players = players;
       gameState.lasers = laserCells;
+      gameState.laserDir = direction;
       updateHUD();
       setTimeout(() => { gameState.lasers = []; }, 300); 
     });
@@ -244,7 +244,6 @@
         let color = '#e84118';
         if (img === imgGrass) color = '#78e08f';
         else if (img === imgItemGun) color = '#00cec9';
-        else if (img === imgLaser) color = '#00a8ff'; // Màu xanh dương làm nền nếu thiếu ảnh tia điện
         
         ctx.fillStyle = color;
         ctx.fillRect(x, y, w, h);
@@ -304,9 +303,27 @@
         ctx.fillRect(exp.x * CELL_SIZE, exp.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
-      // VẼ ẢNH TIA ĐIỆN CUSTOM
+      // CẬP NHẬT: Vẽ laze có hỗ trợ xoay ảnh 90 độ
       gameState.lasers.forEach(cell => {
-        drawSafe(imgLaser, cell.x * CELL_SIZE, cell.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        const cx = cell.x * CELL_SIZE + CELL_SIZE / 2;
+        const cy = cell.y * CELL_SIZE + CELL_SIZE / 2;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // Xoay ảnh 90 độ nếu bắn dọc
+        if (gameState.laserDir === 'up' || gameState.laserDir === 'down') {
+          ctx.rotate(Math.PI / 2);
+        }
+
+        if (imgLaser && imgLaser.complete && imgLaser.naturalWidth > 0) {
+          ctx.drawImage(imgLaser, -CELL_SIZE / 2, -CELL_SIZE / 2, CELL_SIZE, CELL_SIZE);
+        } else {
+          ctx.fillStyle = '#00a8ff';
+          ctx.fillRect(-CELL_SIZE / 2, -CELL_SIZE / 2, CELL_SIZE, CELL_SIZE);
+        }
+
+        ctx.restore();
       });
 
       Object.values(gameState.players).forEach(p => {
