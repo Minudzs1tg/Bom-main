@@ -1,4 +1,4 @@
-const express = require('express');
+\const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const QRCode = require('qrcode');
@@ -31,14 +31,21 @@ function createMap() {
 }
 
 const SPAWN_POINTS = [
-  { x: 1, y: 1, color: '#e74c3c' },   // Player 1
-  { x: 13, y: 11, color: '#3498db' }, // Player 2
-  { x: 13, y: 1, color: '#2ecc71' },  // Player 3
-  { x: 1, y: 11, color: '#f1c40f' }   // Player 4
+  { x: 1, y: 1, color: '#e74c3c' },   
+  { x: 13, y: 11, color: '#3498db' }, 
+  { x: 13, y: 1, color: '#2ecc71' },  
+  { x: 1, y: 11, color: '#f1c40f' }   
 ];
 
 io.on('connection', (socket) => {
   socket.on('join_room', async ({ roomId, hostUrl }) => {
+    
+    // KIỂM TRA PHÒNG ĐẦY: Nếu phòng đã tồn tại và có từ 4 người trở lên -> Chặn lại
+    if (rooms[roomId] && Object.keys(rooms[roomId].players).length >= 4) {
+      socket.emit('room_full');
+      return; 
+    }
+
     socket.join(roomId);
 
     if (!rooms[roomId]) {
@@ -47,22 +54,20 @@ io.on('connection', (socket) => {
 
     const room = rooms[roomId];
 
-    // CƠ CHẾ TÌM GHẾ TRỐNG ĐỂ KHÔNG BỊ TRÙNG NHAU
     let assignedNumber = -1;
     const currentNumbers = Object.values(room.players).map(p => p.playerNumber);
     for (let i = 1; i <= 4; i++) {
       if (!currentNumbers.includes(i)) {
-        assignedNumber = i; // Tìm thấy ghế trống
+        assignedNumber = i; 
         break;
       }
     }
 
-    // Nếu phòng chưa đầy (còn ghế trống)
     if (assignedNumber !== -1) {
       const spawn = SPAWN_POINTS[assignedNumber - 1];
       room.players[socket.id] = {
         id: socket.id,
-        playerNumber: assignedNumber, // Cấp số chuẩn xác (1, 2, 3 hoặc 4)
+        playerNumber: assignedNumber,
         x: spawn.x,
         y: spawn.y,
         startX: spawn.x, 

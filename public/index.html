@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+\<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -12,21 +12,33 @@
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-height: 100vh; overflow: hidden;
     }
-    #lobby { text-align: center; }
-    #lobby img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; }
+    
+    /* GIAO DIỆN SẢNH CHỜ MỚI */
+    #lobby { text-align: center; background: #333; padding: 30px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+    .lobby-btn { padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; margin: 10px 0; width: 100%; transition: 0.2s;}
+    .btn-create { background: #e74c3c; color: white; }
+    .btn-create:hover { background: #c0392b; }
+    .btn-join { background: #0984e3; color: white; }
+    .btn-join:hover { background: #74b9ff; }
+    #room-input { padding: 12px; font-size: 16px; border-radius: 8px; border: none; width: 100%; text-align: center; text-transform: uppercase; margin-bottom: 10px;}
+    
+    #room-info { display: none; }
+    #room-info img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; }
+
     #game-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 600px; }
     
     #hud {
       display: flex; width: 100%; justify-content: space-between; align-items: center;
-      background: #444; padding: 12px 15px; border-radius: 8px; margin-bottom: 10px;
-      font-size: 20px; font-weight: bold; border: 3px solid #333;
+      background: #444; padding: 10px 15px; border-radius: 8px; margin-bottom: 10px;
+      font-size: 18px; font-weight: bold; border: 3px solid #333;
     }
     #hud-stats { display: flex; gap: 15px; }
     .buff-count { font-size: 13px; color: #55efc4; margin-left: 2px; }
+    #hud-room-code { font-size: 14px; color: #f1c40f; text-align: center; }
     
     .btn-restart {
-      background: #00b894; color: white; border: none; padding: 8px 12px;
-      border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
+      background: #00b894; color: white; border: none; padding: 6px 10px;
+      border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;
     }
     .btn-restart:active { background: #00cec9; }
     
@@ -44,16 +56,32 @@
 </head>
 <body>
 
+  <!-- SẢNH CHỜ -->
   <div id="lobby">
-    <h2>Quét mã QR để cùng chơi!</h2>
-    <img id="qr-img" alt="QR Code" />
-    <p>Phòng: <span id="room-display" style="font-weight: bold; color: #f1c40f;"></span></p>
-    <button onclick="startGame()" style="padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; background: #0984e3; color: white; border: none;">Vào Trận</button>
+    <h2>🎮 BOMB IT WEB 🎮</h2>
+    
+    <!-- Phần 1: Chọn hoặc tạo phòng -->
+    <div id="room-selection">
+      <button class="lobby-btn btn-create" onclick="createRoom()">Tạo Phòng Mới</button>
+      <div style="margin: 20px 0; font-size: 14px; color: #aaa;">HOẶC</div>
+      <input type="text" id="room-input" placeholder="NHẬP MÃ PHÒNG" maxlength="6" />
+      <button class="lobby-btn btn-join" onclick="joinRoom()">Vào Phòng</button>
+    </div>
+
+    <!-- Phần 2: Đợi người chơi -->
+    <div id="room-info">
+      <p>Mã Phòng: <span id="room-display" style="font-weight: bold; color: #f1c40f; font-size: 24px;"></span></p>
+      <img id="qr-img" alt="QR Code" />
+      <p style="font-size: 12px; color: #bbb;">Gửi mã này cho bạn bè hoặc quét QR</p>
+      <button class="lobby-btn btn-join" onclick="startGame()">▶ Bắt Đầu Ngay</button>
+    </div>
   </div>
 
+  <!-- SÂN CHƠI -->
   <div id="game-container">
     <div id="hud">
       <div id="hud-stats"></div>
+      <div id="hud-room-code">Phòng:<br><span id="hud-room-id"></span></div>
       <button class="btn-restart" onclick="sendRestart()">🔄 Chơi Lại</button>
     </div>
 
@@ -74,8 +102,6 @@
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
     const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
-    
-    // HOÀN TÁC: Trở về dùng ảnh ô cỏ gốc
     const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
@@ -85,9 +111,40 @@
 
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
-    const roomId = urlParams.get('room') || 'PHONG-VUI';
+    let roomId = urlParams.get('room');
 
-    socket.emit('join_room', { roomId, hostUrl: window.location.origin });
+    // NẾU CÓ SẴN MÃ TRÊN URL (Do quét QR hoặc share link)
+    if (roomId) {
+      document.getElementById('room-selection').style.display = 'none';
+      document.getElementById('room-info').style.display = 'block';
+      socket.emit('join_room', { roomId, hostUrl: window.location.origin });
+    }
+
+    // TẠO PHÒNG MỚI (Random 5 chữ cái)
+    function createRoom() {
+      roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
+      window.history.pushState({}, '', `?room=${roomId}`);
+      document.getElementById('room-selection').style.display = 'none';
+      document.getElementById('room-info').style.display = 'block';
+      socket.emit('join_room', { roomId, hostUrl: window.location.origin });
+    }
+
+    // NHẬP MÃ ĐỂ VÀO
+    function joinRoom() {
+      const input = document.getElementById('room-input').value.trim().toUpperCase();
+      if (!input) return alert('Vui lòng nhập mã phòng!');
+      roomId = input;
+      window.history.pushState({}, '', `?room=${roomId}`);
+      document.getElementById('room-selection').style.display = 'none';
+      document.getElementById('room-info').style.display = 'block';
+      socket.emit('join_room', { roomId, hostUrl: window.location.origin });
+    }
+
+    // XỬ LÝ KHI PHÒNG ĐẦY
+    socket.on('room_full', () => {
+      alert('Rất tiếc! Phòng này đã đủ 4 người chơi.');
+      window.location.href = '/'; // Tải lại về trang chủ
+    });
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -108,7 +165,7 @@
             <div>🔥 <span>${myPlayer.bombPower}</span>${fireCharge}</div>
           `;
         } else {
-          document.getElementById('hud-stats').innerHTML = "<div style='color:#ff7675;'>💀 ĐÃ TỬ TRẬN</div>";
+          document.getElementById('hud-stats').innerHTML = "<div style='color:#ff7675;'>💀 TỬ TRẬN</div>";
         }
       }
     }
@@ -116,6 +173,7 @@
     socket.on('room_state', (data) => {
       document.getElementById('qr-img').src = data.qrCode;
       document.getElementById('room-display').innerText = data.roomId;
+      document.getElementById('hud-room-id').innerText = data.roomId; // Cập nhật mã lên thanh máu
       gameState.map = data.map;
       gameState.players = data.players;
       updateHUD();
@@ -181,7 +239,6 @@
       if (img && img.complete && img.naturalWidth > 0) {
         ctx.drawImage(img, x, y, w, h);
       } else {
-        // Đổ màu xanh lá mạ dự phòng nếu thiếu ảnh grass.png
         ctx.fillStyle = (img === imgGrass) ? '#78e08f' : '#e84118';
         ctx.fillRect(x, y, w, h);
       }
@@ -194,7 +251,6 @@
         for (let c = 0; c < gameState.map[r].length; c++) {
           const tile = gameState.map[r][c];
           
-          // HOÀN TÁC: Vẽ cỏ từng ô (Sử dụng drawSafe)
           drawSafe(imgGrass, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           
           if (tile === 1) drawSafe(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
