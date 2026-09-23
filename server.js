@@ -47,7 +47,6 @@ io.on('connection', (socket) => {
     socket.join(roomId);
 
     if (!rooms[roomId]) {
-      // THÊM: mảng chứa mìn được gài
       rooms[roomId] = { id: roomId, map: createMap(), players: {}, bombs: [], mines: [] };
     }
 
@@ -79,7 +78,8 @@ io.on('connection', (socket) => {
         bombBuffCharges: 0,
         fireBuffCharges: 0,
         hasElectricGun: 0,
-        hasMine: 0, // THÊM: Số lượng mìn đang có
+        hasMine: 0,
+        hasShield: false, // THÊM: Trạng thái khiên bảo vệ
         facingDir: 'down'
       };
     }
@@ -102,7 +102,7 @@ io.on('connection', (socket) => {
 
     room.map = createMap();
     room.bombs = [];
-    room.mines = []; // Reset mìn
+    room.mines = [];
     Object.values(room.players).forEach(p => {
       p.x = p.startX;
       p.y = p.startY;
@@ -114,6 +114,7 @@ io.on('connection', (socket) => {
       p.fireBuffCharges = 0;
       p.hasElectricGun = 0;
       p.hasMine = 0;
+      p.hasShield = false; // Reset khiên
       p.facingDir = 'down';
     });
 
@@ -135,14 +136,15 @@ io.on('connection', (socket) => {
     if (dir === 'left') nextX--;
     if (dir === 'right') nextX++;
 
-    if (room.map[nextY] && [0, 3, 4, 5, 6].includes(room.map[nextY][nextX])) {
+    if (room.map[nextY] && [0, 3, 4, 5, 6, 7].includes(room.map[nextY][nextX])) {
       const targetCell = room.map[nextY][nextX];
       
-      if ([3, 4, 5, 6].includes(targetCell)) {
+      if ([3, 4, 5, 6, 7].includes(targetCell)) {
         if (targetCell === 3) { p.bombLimit = 2; p.bombBuffCharges = 3; }
         if (targetCell === 4) { p.bombPower = 2; p.fireBuffCharges = 3; }
         if (targetCell === 5) { p.hasElectricGun = 3; } 
-        if (targetCell === 6) { p.hasMine = 3; } // Ăn hộp mìn được 3 quả
+        if (targetCell === 6) { p.hasMine = 3; } 
+        if (targetCell === 7) { p.hasShield = true; } // Ăn khiên
         
         room.map[nextY][nextX] = 0; 
         io.to(roomId).emit('map_updated', room.map); 
@@ -151,17 +153,18 @@ io.on('connection', (socket) => {
       p.x = nextX;
       p.y = nextY;
 
-      // KIỂM TRA DẪM MÌN
+      // KIỂM TRA DẪM MÌN VÀ ĐỠ ĐÒN
       const mineIdx = room.mines.findIndex(m => m.x === p.x && m.y === p.y);
       if (mineIdx !== -1) {
         const mx = p.x; const my = p.y;
-        room.mines.splice(mineIdx, 1); // Xóa mìn đã nổ
-        p.lives--;
+        room.mines.splice(mineIdx, 1);
         
-        if (p.lives > 0) { 
-          p.x = p.startX; p.y = p.startY; 
-        } else { 
-          p.alive = false; 
+        if (p.hasShield) {
+          p.hasShield = false; // Vỡ khiên, không mất mạng
+        } else {
+          p.lives--;
+          if (p.lives > 0) { p.x = p.startX; p.y = p.startY; } 
+          else { p.alive = false; }
         }
 
         io.to(roomId).emit('mine_exploded', {
@@ -177,15 +180,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // TÍNH NĂNG MỚI: ĐẶT MÌN
   socket.on('place_mine', ({ roomId }) => {
     const room = rooms[roomId];
     if (!room || !room.players[socket.id] || !room.players[socket.id].alive) return;
 
     const p = room.players[socket.id];
     if (p.hasMine <= 0) return;
-
-    // Không cho đặt nếu ô đó đã có mìn
     if (room.mines.some(m => m.x === p.x && m.y === p.y)) return;
 
     p.hasMine--;
@@ -219,21 +219,18 @@ io.on('connection', (socket) => {
     while (true) {
       currX += dx;
       currY += dy;
-      
-      if (!room.map[currY] || room.map[currY][currX] === 1 || room.map[currY][currX] === 2) {
-        break; 
-      }
+      if (!room.map[currY] || room.map[currY][currX] === 1 || room.map[currY][currX] === 2) break; 
       laserCells.push({ x: currX, y: currY });
     }
 
     Object.values(room.players).forEach((target) => {
       if (target.alive && laserCells.some(c => c.x === target.x && c.y === target.y)) {
-        target.lives--;
-        if (target.lives > 0) {
-          target.x = target.startX;
-          target.y = target.startY;
+        if (target.hasShield) {
+          target.hasShield = false; // Đỡ laze
         } else {
-          target.alive = false;
+          target.lives--;
+          if (target.lives > 0) { target.x = target.startX; target.y = target.startY; } 
+          else { target.alive = false; }
         }
       }
     });
@@ -284,28 +281,28 @@ io.on('connection', (socket) => {
 
           if (room.map[targetY][targetX] === 2) {
             const randomDrop = Math.random();
-            // CẬP NHẬT TỈ LỆ RỚT ĐỒ (Thêm Item số 6: Hộp Mìn)
+            // CHIA ĐỀU TỈ LỆ RỚT 5 LOẠI ITEM (Mỗi loại 12%, tổng 60% rớt đồ)
             if (randomDrop < 0.12) room.map[targetY][targetX] = 3;       
             else if (randomDrop < 0.24) room.map[targetY][targetX] = 4;   
             else if (randomDrop < 0.36) room.map[targetY][targetX] = 5;  
             else if (randomDrop < 0.48) room.map[targetY][targetX] = 6;  
+            else if (randomDrop < 0.60) room.map[targetY][targetX] = 7;  // Item khiên
             else room.map[targetY][targetX] = 0;
             break; 
           }
         }
       });
 
-      // Bom nổ cũng phá hủy mìn gài trên đất
       room.mines = room.mines.filter(m => !explosionCells.some(c => c.x === m.x && c.y === m.y));
 
       Object.values(room.players).forEach((player) => {
         if (player.alive && explosionCells.some(c => c.x === player.x && c.y === player.y)) {
-          player.lives--;
-          if (player.lives > 0) {
-            player.x = player.startX;
-            player.y = player.startY;
+          if (player.hasShield) {
+            player.hasShield = false; // Đỡ bom nổ
           } else {
-            player.alive = false;
+            player.lives--;
+            if (player.lives > 0) { player.x = player.startX; player.y = player.startY; } 
+            else { player.alive = false; }
           }
         }
       });
@@ -315,7 +312,7 @@ io.on('connection', (socket) => {
         explosionCells,
         updatedMap: room.map,
         players: room.players,
-        mines: room.mines // Cập nhật mảng mìn sau nổ
+        mines: room.mines 
       });
     }, 2500);
   });

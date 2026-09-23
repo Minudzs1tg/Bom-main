@@ -29,15 +29,15 @@
     #hud {
       display: flex; width: 100%; justify-content: space-between; align-items: center;
       background: #444; padding: 10px 15px; border-radius: 8px; margin-bottom: 10px;
-      font-size: 16px; font-weight: bold; border: 3px solid #333;
+      font-size: 15px; font-weight: bold; border: 3px solid #333;
     }
-    #hud-stats { display: flex; gap: 10px; }
+    #hud-stats { display: flex; gap: 8px; }
     .buff-count { font-size: 12px; color: #55efc4; margin-left: 2px; }
-    #hud-room-code { font-size: 13px; color: #f1c40f; text-align: center; }
+    #hud-room-code { font-size: 12px; color: #f1c40f; text-align: center; }
     
     .btn-restart {
       background: #00b894; color: white; border: none; padding: 6px 10px;
-      border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;
+      border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;
     }
     .btn-restart:active { background: #00cec9; }
     
@@ -52,7 +52,7 @@
     .btn:active { background: #666; }
     .btn-bomb { background: #e74c3c; grid-column: 2; }
     .btn-shoot { background: #0984e3; font-size: 20px; }
-    .btn-mine { background: #9b59b6; font-size: 20px; } /* Nút gài mìn màu tím */
+    .btn-mine { background: #9b59b6; font-size: 20px; } 
   </style>
 </head>
 <body>
@@ -101,11 +101,12 @@
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
     const imgItemGun = new Image(); imgItemGun.src = '/assets/item-gun.png';
     const imgLaser = new Image(); imgLaser.src = '/assets/laser.png'; 
+    const imgItemMine = new Image(); imgItemMine.src = '/assets/item-mine.png'; 
+    const imgTrapMine = new Image(); imgTrapMine.src = '/assets/trap-mine.png'; 
     const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
     
-    // ẢNH CHO MÌN
-    const imgItemMine = new Image(); imgItemMine.src = '/assets/item-mine.png'; // Rớt ra để ăn
-    const imgTrapMine = new Image(); imgTrapMine.src = '/assets/trap-mine.png'; // Mìn nằm trên đất
+    // ẢNH CHO KHIÊN BẢO VỆ
+    const imgItemShield = new Image(); imgItemShield.src = '/assets/item-shield.png';
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
     const imgPlayer2 = new Image(); imgPlayer2.src = '/assets/player2.png';
@@ -160,6 +161,7 @@
 
           document.getElementById('hud-stats').innerHTML = `
             <div>❤️<span>${myPlayer.lives}</span></div>
+            <div>🛡️<span style="color:${myPlayer.hasShield ? '#3498db' : '#fff'}">${myPlayer.hasShield ? '1' : '0'}</span></div>
             <div>💣<span>${myPlayer.bombLimit}</span>${bombCharge}</div>
             <div>🔥<span>${myPlayer.bombPower}</span>${fireCharge}</div>
             <div style="color:#00cec9;">⚡<span>${myPlayer.hasElectricGun}</span></div>
@@ -216,7 +218,6 @@
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
-    // MÌN ĐƯỢC ĐẶT / NỔ
     socket.on('mine_placed', (mine) => {
       gameState.mines.push(mine);
     });
@@ -240,7 +241,7 @@
     function sendMove(dir) { socket.emit('move', { roomId, dir }); }
     function sendBomb() { socket.emit('place_bomb', { roomId }); }
     function sendShoot() { socket.emit('shoot_gun', { roomId }); } 
-    function sendMine() { socket.emit('place_mine', { roomId }); } // GÀI MÌN
+    function sendMine() { socket.emit('place_mine', { roomId }); } 
     function sendRestart() { socket.emit('restart_game', { roomId }); }
 
     window.addEventListener('keydown', (e) => {
@@ -250,7 +251,7 @@
       if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') sendMove('right');
       if (e.key === ' ' || e.key === 'Enter') sendBomb();
       if (e.key === 'e' || e.key === 'E') sendShoot();
-      if (e.key === 'q' || e.key === 'Q') sendMine(); // Phím Q để gài mìn
+      if (e.key === 'q' || e.key === 'Q') sendMine();
     });
 
     function startGame() {
@@ -267,7 +268,8 @@
         let color = '#e84118';
         if (img === imgGrass) color = '#78e08f';
         else if (img === imgItemGun) color = '#00cec9';
-        else if (img === imgItemMine || img === imgTrapMine) color = '#9b59b6'; // Mìn màu tím
+        else if (img === imgItemMine || img === imgTrapMine) color = '#9b59b6';
+        else if (img === imgItemShield) color = '#3498db'; // Khối vuông màu xanh làm dự phòng cho Khiên
         
         ctx.fillStyle = color;
         ctx.fillRect(x, y, w, h);
@@ -315,11 +317,11 @@
           else if (tile === 3) drawSafe(imgItemBomb, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 4) drawSafe(imgItemFire, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 5) drawSafe(imgItemGun, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
-          else if (tile === 6) drawSafe(imgItemMine, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); // Vẽ hộp mìn rớt ra
+          else if (tile === 6) drawSafe(imgItemMine, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
+          else if (tile === 7) drawSafe(imgItemShield, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); // Vẽ hộp Khiên
         }
       }
 
-      // VẼ MÌN GÀI TRÊN ĐẤT
       gameState.mines.forEach(m => {
         drawSafe(imgTrapMine, m.x * CELL_SIZE, m.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
@@ -366,6 +368,17 @@
 
         if (p.hasElectricGun > 0) {
           drawAimArrow(p.x, p.y, p.facingDir);
+        }
+
+        // VẼ HÀO QUANG KHIÊN BẢO VỆ NẾU NHÂN VẬT ĐANG BẬT KHIÊN
+        if (p.hasShield) {
+          ctx.beginPath();
+          ctx.arc(p.x * CELL_SIZE + CELL_SIZE/2, p.y * CELL_SIZE + CELL_SIZE/2, CELL_SIZE/2 + 2, 0, 2*Math.PI);
+          ctx.fillStyle = 'rgba(52, 152, 219, 0.4)';
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(52, 152, 219, 0.8)';
+          ctx.stroke();
         }
       });
 
