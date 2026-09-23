@@ -39,8 +39,6 @@ const SPAWN_POINTS = [
 
 io.on('connection', (socket) => {
   socket.on('join_room', async ({ roomId, hostUrl }) => {
-    
-    // KIỂM TRA PHÒNG ĐẦY: Nếu phòng đã tồn tại và có từ 4 người trở lên -> Chặn lại
     if (rooms[roomId] && Object.keys(rooms[roomId].players).length >= 4) {
       socket.emit('room_full');
       return; 
@@ -78,7 +76,9 @@ io.on('connection', (socket) => {
         bombLimit: 1,
         bombPower: 1,
         bombBuffCharges: 0,
-        fireBuffCharges: 0
+        fireBuffCharges: 0,
+        hasElectricGun: 0,    // Số lượt bắn súng điện
+        facingDir: 'down'     // Hướng mặc định ban đầu
       };
     }
 
@@ -108,12 +108,11 @@ io.on('connection', (socket) => {
       p.bombPower = 1;
       p.bombBuffCharges = 0;
       p.fireBuffCharges = 0;
+      p.hasElectricGun = 0;
+      p.facingDir = 'down';
     });
 
-    io.to(roomId).emit('game_restarted', {
-      map: room.map,
-      players: room.players
-    });
+    io.to(roomId).emit('game_restarted', { map: room.map, players: room.players });
   });
 
   socket.on('move', ({ roomId, dir }) => {
@@ -121,6 +120,8 @@ io.on('connection', (socket) => {
     if (!room || !room.players[socket.id] || !room.players[socket.id].alive) return;
 
     const p = room.players[socket.id];
+    p.facingDir = dir; // Luôn cập nhật hướng nhìn khi di chuyển
+    
     let nextX = p.x;
     let nextY = p.y;
 
@@ -129,28 +130,79 @@ io.on('connection', (socket) => {
     if (dir === 'left') nextX--;
     if (dir === 'right') nextX++;
 
-    if (room.map[nextY] && [0, 3, 4].includes(room.map[nextY][nextX])) {
+    if (room.map[nextY] && [0, 3, 4, 5].includes(room.map[nextY][nextX])) {
       const targetCell = room.map[nextY][nextX];
       
-      if (targetCell === 3 || targetCell === 4) {
-        if (targetCell === 3) {
-          p.bombLimit = 2; 
-          p.bombBuffCharges = 3; 
-        }
-        if (targetCell === 4) {
-          p.bombPower = 2; 
-          p.fireBuffCharges = 3; 
-        }
+      if ([3, 4, 5].includes(targetCell)) {
+        if (targetCell === 3) { p.bombLimit = 2; p.bombBuffCharges = 3; }
+        if (targetCell === 4) { p.bombPower = 2; p.fireBuffCharges = 3; }
+        if (targetCell === 5) { p.hasElectricGun = 3; } // Ăn súng điện được 3 phát bắn
         
         room.map[nextY][nextX] = 0; 
         io.to(roomId).emit('map_updated', room.map); 
-        io.to(roomId).emit('player_updated', p); 
       }
 
       p.x = nextX;
       p.y = nextY;
-      io.to(roomId).emit('player_moved', { id: socket.id, x: p.x, y: p.y });
+      // Gửi toàn bộ dữ liệu player (gồm cả facingDir) để vẽ mũi tên
+      io.to(roomId).emit('player_updated', p);
+    } else {
+      // Dù vướng tường không đi được, vẫn cập nhật hướng nhìn xoay tại chỗ
+      io.to(roomId).emit('player_updated', p);
     }
+  });
+
+  // TÍNH NĂNG MỚI: BẮN SÚNG ĐIỆN
+  socket.on('shoot_gun', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id] || !room.players[socket.id].alive) return;
+
+    const p = room.players[socket.id];
+    if (p.hasElectricGun <= 0) return; // Hết đạn thì không bắn được
+
+    p.hasElectricGun--; // Trừ 1 viên đạn
+    io.to(roomId).emit('player_updated', p); // Cập nhật số đạn hiển thị
+
+    const laserCells = [];
+    let currX = p.x;
+    let currY = p.y;
+    let dx = 0, dy = 0;
+    
+    if (p.facingDir === 'up') dy = -1;
+    if (p.facingDir === 'down') dy = 1;
+    if (p.facingDir === 'left') dx = -1;
+    if (p.facingDir === 'right') dx = 1;
+
+    // Tính đường đạn lướt đi tới khi đụng vật cản (1 hoặc 2)
+    while (true) {
+      currX += dx;
+      currY += dy;
+      
+      // Nếu đụng map, hoặc tường cứng (1), hoặc khối gỗ/gạch mềm (2) -> Lập tức cản lại
+      if (!room.map[currY] || room.map[currY][currX] === 1 || room.map[currY][currX] === 2) {
+        break; 
+      }
+      laserCells.push({ x: currX, y: currY });
+    }
+
+    // Kiểm tra xem có trúng ai không
+    Object.values(room.players).forEach((target) => {
+      if (target.alive && laserCells.some(c => c.x === target.x && c.y === target.y)) {
+        target.lives--;
+        if (target.lives > 0) {
+          target.x = target.startX;
+          target.y = target.startY;
+        } else {
+          target.alive = false;
+        }
+      }
+    });
+
+    // Phát tia laze chớp nhoáng tới mọi người
+    io.to(roomId).emit('laser_fired', {
+      laserCells,
+      players: room.players
+    });
   });
 
   socket.on('place_bomb', ({ roomId }) => {
@@ -192,8 +244,10 @@ io.on('connection', (socket) => {
 
           if (room.map[targetY][targetX] === 2) {
             const randomDrop = Math.random();
-            if (randomDrop < 0.2) room.map[targetY][targetX] = 3;
-            else if (randomDrop < 0.4) room.map[targetY][targetX] = 4;
+            // CHỈNH SỬA TỈ LỆ RỚT ĐỒ ĐỂ CÓ SÚNG ĐIỆN (Item số 5)
+            if (randomDrop < 0.15) room.map[targetY][targetX] = 3;       // 15% Bom
+            else if (randomDrop < 0.3) room.map[targetY][targetX] = 4;   // 15% Lửa
+            else if (randomDrop < 0.45) room.map[targetY][targetX] = 5;  // 15% Súng điện
             else room.map[targetY][targetX] = 0;
             break; 
           }

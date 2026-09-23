@@ -1,4 +1,4 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -13,7 +13,6 @@
       min-height: 100vh; overflow: hidden;
     }
     
-    /* GIAO DIỆN SẢNH CHỜ MỚI */
     #lobby { text-align: center; background: #333; padding: 30px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
     .lobby-btn { padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; margin: 10px 0; width: 100%; transition: 0.2s;}
     .btn-create { background: #e74c3c; color: white; }
@@ -52,23 +51,19 @@
     }
     .btn:active { background: #666; }
     .btn-bomb { background: #e74c3c; grid-column: 2; }
+    .btn-shoot { background: #0984e3; font-size: 24px; }
   </style>
 </head>
 <body>
 
-  <!-- SẢNH CHỜ -->
   <div id="lobby">
     <h2>🎮 BOMB IT WEB 🎮</h2>
-    
-    <!-- Phần 1: Chọn hoặc tạo phòng -->
     <div id="room-selection">
       <button class="lobby-btn btn-create" onclick="createRoom()">Tạo Phòng Mới</button>
       <div style="margin: 20px 0; font-size: 14px; color: #aaa;">HOẶC</div>
       <input type="text" id="room-input" placeholder="NHẬP MÃ PHÒNG" maxlength="6" />
       <button class="lobby-btn btn-join" onclick="joinRoom()">Vào Phòng</button>
     </div>
-
-    <!-- Phần 2: Đợi người chơi -->
     <div id="room-info">
       <p>Mã Phòng: <span id="room-display" style="font-weight: bold; color: #f1c40f; font-size: 24px;"></span></p>
       <img id="qr-img" alt="QR Code" />
@@ -77,7 +72,6 @@
     </div>
   </div>
 
-  <!-- SÂN CHƠI -->
   <div id="game-container">
     <div id="hud">
       <div id="hud-stats"></div>
@@ -92,7 +86,8 @@
       <button class="btn" onclick="sendMove('left')">◀</button>
       <button class="btn btn-bomb" onclick="sendBomb()">💣</button>
       <button class="btn" onclick="sendMove('right')">▶</button>
-      <div></div><button class="btn" onclick="sendMove('down')">▼</button><div></div>
+      <div></div><button class="btn" onclick="sendMove('down')">▼</button>
+      <button class="btn btn-shoot" onclick="sendShoot()">⚡</button>
     </div>
   </div>
 
@@ -102,6 +97,11 @@
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
     const imgItemBomb = new Image(); imgItemBomb.src = '/assets/item-bomb.png';
     const imgItemFire = new Image(); imgItemFire.src = '/assets/item-fire.png';
+    const imgItemGun = new Image(); imgItemGun.src = '/assets/item-gun.png';
+    
+    // KHAI BÁO HÌNH ẢNH TIA ĐIỆN MỚI
+    const imgLaser = new Image(); imgLaser.src = '/assets/laser.png'; 
+    
     const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
@@ -113,14 +113,12 @@
     const urlParams = new URLSearchParams(window.location.search);
     let roomId = urlParams.get('room');
 
-    // NẾU CÓ SẴN MÃ TRÊN URL (Do quét QR hoặc share link)
     if (roomId) {
       document.getElementById('room-selection').style.display = 'none';
       document.getElementById('room-info').style.display = 'block';
       socket.emit('join_room', { roomId, hostUrl: window.location.origin });
     }
 
-    // TẠO PHÒNG MỚI (Random 5 chữ cái)
     function createRoom() {
       roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
       window.history.pushState({}, '', `?room=${roomId}`);
@@ -129,7 +127,6 @@
       socket.emit('join_room', { roomId, hostUrl: window.location.origin });
     }
 
-    // NHẬP MÃ ĐỂ VÀO
     function joinRoom() {
       const input = document.getElementById('room-input').value.trim().toUpperCase();
       if (!input) return alert('Vui lòng nhập mã phòng!');
@@ -140,17 +137,16 @@
       socket.emit('join_room', { roomId, hostUrl: window.location.origin });
     }
 
-    // XỬ LÝ KHI PHÒNG ĐẦY
     socket.on('room_full', () => {
       alert('Rất tiếc! Phòng này đã đủ 4 người chơi.');
-      window.location.href = '/'; // Tải lại về trang chủ
+      window.location.href = '/'; 
     });
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const CELL_SIZE = 40;
 
-    let gameState = { map: [], players: {}, bombs: [], explosions: [] };
+    let gameState = { map: [], players: {}, bombs: [], explosions: [], lasers: [] };
 
     function updateHUD() {
       const myPlayer = gameState.players[socket.id];
@@ -163,6 +159,7 @@
             <div>❤️ <span>${myPlayer.lives}</span></div>
             <div>💣 <span>${myPlayer.bombLimit}</span>${bombCharge}</div>
             <div>🔥 <span>${myPlayer.bombPower}</span>${fireCharge}</div>
+            <div style="color:#00cec9;">⚡ <span>${myPlayer.hasElectricGun}</span></div>
           `;
         } else {
           document.getElementById('hud-stats').innerHTML = "<div style='color:#ff7675;'>💀 TỬ TRẬN</div>";
@@ -173,7 +170,7 @@
     socket.on('room_state', (data) => {
       document.getElementById('qr-img').src = data.qrCode;
       document.getElementById('room-display').innerText = data.roomId;
-      document.getElementById('hud-room-id').innerText = data.roomId; // Cập nhật mã lên thanh máu
+      document.getElementById('hud-room-id').innerText = data.roomId;
       gameState.map = data.map;
       gameState.players = data.players;
       updateHUD();
@@ -183,16 +180,12 @@
       gameState.map = data.map;
       gameState.players = data.players;
       gameState.bombs = [];       
-      gameState.explosions = [];  
+      gameState.explosions = [];
+      gameState.lasers = [];
       updateHUD();                
     });
 
-    socket.on('player_moved', ({ id, x, y }) => {
-      if (gameState.players[id]) {
-        gameState.players[id].x = x;
-        gameState.players[id].y = y;
-      }
-    });
+    socket.on('player_moved', ({ id, x, y }) => {});
 
     socket.on('player_updated', (updatedPlayer) => {
       gameState.players[updatedPlayer.id] = updatedPlayer;
@@ -216,16 +209,25 @@
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
+    socket.on('laser_fired', ({ laserCells, players }) => {
+      gameState.players = players;
+      gameState.lasers = laserCells;
+      updateHUD();
+      setTimeout(() => { gameState.lasers = []; }, 300); 
+    });
+
     function sendMove(dir) { socket.emit('move', { roomId, dir }); }
     function sendBomb() { socket.emit('place_bomb', { roomId }); }
+    function sendShoot() { socket.emit('shoot_gun', { roomId }); } 
     function sendRestart() { socket.emit('restart_game', { roomId }); }
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowUp' || e.key === 'w') sendMove('up');
-      if (e.key === 'ArrowDown' || e.key === 's') sendMove('down');
-      if (e.key === 'ArrowLeft' || e.key === 'a') sendMove('left');
-      if (e.key === 'ArrowRight' || e.key === 'd') sendMove('right');
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') sendMove('up');
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') sendMove('down');
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') sendMove('left');
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') sendMove('right');
       if (e.key === ' ' || e.key === 'Enter') sendBomb();
+      if (e.key === 'e' || e.key === 'E') sendShoot();
     });
 
     function startGame() {
@@ -239,9 +241,41 @@
       if (img && img.complete && img.naturalWidth > 0) {
         ctx.drawImage(img, x, y, w, h);
       } else {
-        ctx.fillStyle = (img === imgGrass) ? '#78e08f' : '#e84118';
+        let color = '#e84118';
+        if (img === imgGrass) color = '#78e08f';
+        else if (img === imgItemGun) color = '#00cec9';
+        else if (img === imgLaser) color = '#00a8ff'; // Màu xanh dương làm nền nếu thiếu ảnh tia điện
+        
+        ctx.fillStyle = color;
         ctx.fillRect(x, y, w, h);
       }
+    }
+
+    function drawAimArrow(x, y, dir) {
+      ctx.fillStyle = '#f1c40f'; 
+      ctx.beginPath();
+      const cx = x * CELL_SIZE + CELL_SIZE / 2;
+      const cy = y * CELL_SIZE + CELL_SIZE / 2;
+      const offset = 18; 
+      
+      if (dir === 'up') {
+        ctx.moveTo(cx, cy - offset - 10);
+        ctx.lineTo(cx - 8, cy - offset);
+        ctx.lineTo(cx + 8, cy - offset);
+      } else if (dir === 'down') {
+        ctx.moveTo(cx, cy + offset + 10);
+        ctx.lineTo(cx - 8, cy + offset);
+        ctx.lineTo(cx + 8, cy + offset);
+      } else if (dir === 'left') {
+        ctx.moveTo(cx - offset - 10, cy);
+        ctx.lineTo(cx - offset, cy - 8);
+        ctx.lineTo(cx - offset, cy + 8);
+      } else if (dir === 'right') {
+        ctx.moveTo(cx + offset + 10, cy);
+        ctx.lineTo(cx + offset, cy - 8);
+        ctx.lineTo(cx + offset, cy + 8);
+      }
+      ctx.fill();
     }
 
     function render() {
@@ -257,6 +291,7 @@
           else if (tile === 2) drawSafe(imgBrick, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 3) drawSafe(imgItemBomb, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 4) drawSafe(imgItemFire, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          else if (tile === 5) drawSafe(imgItemGun, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
         }
       }
 
@@ -269,6 +304,11 @@
         ctx.fillRect(exp.x * CELL_SIZE, exp.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       });
 
+      // VẼ ẢNH TIA ĐIỆN CUSTOM
+      gameState.lasers.forEach(cell => {
+        drawSafe(imgLaser, cell.x * CELL_SIZE, cell.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      });
+
       Object.values(gameState.players).forEach(p => {
         if (!p.alive) return;
         
@@ -278,6 +318,10 @@
         if (p.playerNumber === 4) currentPlayerImg = imgPlayer4;
 
         drawSafe(currentPlayerImg, p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+        if (p.hasElectricGun > 0) {
+          drawAimArrow(p.x, p.y, p.facingDir);
+        }
       });
 
       requestAnimationFrame(render);
