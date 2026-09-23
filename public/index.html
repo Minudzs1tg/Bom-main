@@ -53,6 +53,13 @@
     .btn-bomb { background: #e74c3c; grid-column: 2; }
     .btn-shoot { background: #0984e3; font-size: 20px; }
     .btn-mine { background: #9b59b6; font-size: 20px; } 
+
+    /* STYLE CHO BẢNG THÔNG BÁO CHIẾN THẮNG */
+    #victory-banner {
+      display: none; position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9); padding: 30px 50px; border-radius: 15px; border: 4px solid #f1c40f;
+      text-align: center; font-size: 24px; color: #f1c40f; z-index: 100;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +81,7 @@
   </div>
 
   <div id="game-container">
+    <div id="victory-banner">🎉 BẠN ĐÃ CHIẾN THẮNG! 🎉</div>
     <div id="hud">
       <div id="hud-stats"></div>
       <div id="hud-room-code">Phòng:<br><span id="hud-room-id"></span></div>
@@ -94,6 +102,20 @@
   </div>
 
   <script>
+    // --- LOAD ÂM THANH ---
+    const bgm = new Audio('/assets/bgm.mp3'); bgm.loop = true; bgm.volume = 0.5;
+    const sfxVictory = new Audio('/assets/victory.mp3');
+    const sfxBomb = new Audio('/assets/bomb.mp3');
+    const sfxLaser = new Audio('/assets/laser.mp3');
+    const sfxMine = new Audio('/assets/mine.mp3');
+
+    // Hàm tiện ích để âm thanh không bị gián đoạn nếu nổ liên tục
+    function playSound(audioEl) {
+      audioEl.currentTime = 0;
+      audioEl.play().catch(e => console.log("Trình duyệt chặn Audio"));
+    }
+
+    // --- LOAD HÌNH ẢNH ---
     const imgWall = new Image(); imgWall.src = '/assets/wall.png';
     const imgBrick = new Image(); imgBrick.src = '/assets/brick.png';
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
@@ -103,10 +125,8 @@
     const imgLaser = new Image(); imgLaser.src = '/assets/laser.png'; 
     const imgItemMine = new Image(); imgItemMine.src = '/assets/item-mine.png'; 
     const imgTrapMine = new Image(); imgTrapMine.src = '/assets/trap-mine.png'; 
-    const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
-    
-    // ẢNH CHO KHIÊN BẢO VỆ
     const imgItemShield = new Image(); imgItemShield.src = '/assets/item-shield.png';
+    const imgGrass = new Image(); imgGrass.src = '/assets/grass.png';
 
     const imgPlayer1 = new Image(); imgPlayer1.src = '/assets/player1.png';
     const imgPlayer2 = new Image(); imgPlayer2.src = '/assets/player2.png';
@@ -190,25 +210,27 @@
       gameState.bombs = [];       
       gameState.explosions = [];
       gameState.lasers = [];
+      
+      // RESET NHẠC VÀ BẢNG THÔNG BÁO
+      document.getElementById('victory-banner').style.display = 'none';
+      sfxVictory.pause();
+      sfxVictory.currentTime = 0;
+      playSound(bgm); // Bật lại nhạc nền
+      
       updateHUD();                
     });
 
     socket.on('player_moved', ({ id, x, y }) => {});
-
     socket.on('player_updated', (updatedPlayer) => {
       gameState.players[updatedPlayer.id] = updatedPlayer;
       if (updatedPlayer.id === socket.id) updateHUD();
     });
+    socket.on('map_updated', (updatedMap) => { gameState.map = updatedMap; });
+    socket.on('bomb_placed', (bomb) => { gameState.bombs.push(bomb); });
 
-    socket.on('map_updated', (updatedMap) => {
-      gameState.map = updatedMap;
-    });
-
-    socket.on('bomb_placed', (bomb) => {
-      gameState.bombs.push(bomb);
-    });
-
+    // SỰ KIỆN NỔ BOM
     socket.on('bomb_exploded', ({ bombId, explosionCells, updatedMap, players, mines }) => {
+      playSound(sfxBomb); // BẬT TIẾNG BOM
       gameState.bombs = gameState.bombs.filter(b => b.id !== bombId);
       gameState.map = updatedMap;
       gameState.players = players;
@@ -218,11 +240,11 @@
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
-    socket.on('mine_placed', (mine) => {
-      gameState.mines.push(mine);
-    });
+    socket.on('mine_placed', (mine) => { gameState.mines.push(mine); });
 
+    // SỰ KIỆN NỔ MÌN
     socket.on('mine_exploded', ({ explosionCells, players, mines }) => {
+      playSound(sfxMine); // BẬT TIẾNG MÌN
       gameState.players = players;
       gameState.mines = mines;
       gameState.explosions = explosionCells;
@@ -230,12 +252,23 @@
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
+    // SỰ KIỆN BẮN LAZE
     socket.on('laser_fired', ({ laserCells, direction, players }) => {
+      playSound(sfxLaser); // BẬT TIẾNG SÚNG
       gameState.players = players;
       gameState.lasers = laserCells;
       gameState.laserDir = direction;
       updateHUD();
       setTimeout(() => { gameState.lasers = []; }, 300); 
+    });
+
+    // SỰ KIỆN KẾT THÚC TRẬN ĐẤU (CÓ NGƯỜI THẮNG)
+    socket.on('game_over', ({ winnerId }) => {
+      bgm.pause(); // Tắt nhạc nền
+      if (winnerId === socket.id) {
+        playSound(sfxVictory); // Bật nhạc chiến thắng nếu bạn là người trụ lại cuối
+        document.getElementById('victory-banner').style.display = 'block';
+      }
     });
 
     function sendMove(dir) { socket.emit('move', { roomId, dir }); }
@@ -255,6 +288,9 @@
     });
 
     function startGame() {
+      // BẮT ĐẦU CHƠI THÌ BẬT NHẠC NỀN (Yêu cầu click chuột thì trình duyệt mới cho phát tiếng)
+      playSound(bgm);
+      
       document.getElementById('lobby').style.display = 'none';
       document.getElementById('game-container').style.display = 'flex';
       updateHUD();
@@ -269,7 +305,7 @@
         if (img === imgGrass) color = '#78e08f';
         else if (img === imgItemGun) color = '#00cec9';
         else if (img === imgItemMine || img === imgTrapMine) color = '#9b59b6';
-        else if (img === imgItemShield) color = '#3498db'; // Khối vuông màu xanh làm dự phòng cho Khiên
+        else if (img === imgItemShield) color = '#3498db'; 
         
         ctx.fillStyle = color;
         ctx.fillRect(x, y, w, h);
@@ -318,7 +354,7 @@
           else if (tile === 4) drawSafe(imgItemFire, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 5) drawSafe(imgItemGun, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
           else if (tile === 6) drawSafe(imgItemMine, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
-          else if (tile === 7) drawSafe(imgItemShield, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); // Vẽ hộp Khiên
+          else if (tile === 7) drawSafe(imgItemShield, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
         }
       }
 
@@ -370,7 +406,6 @@
           drawAimArrow(p.x, p.y, p.facingDir);
         }
 
-        // VẼ HÀO QUANG KHIÊN BẢO VỆ NẾU NHÂN VẬT ĐANG BẬT KHIÊN
         if (p.hasShield) {
           ctx.beginPath();
           ctx.arc(p.x * CELL_SIZE + CELL_SIZE/2, p.y * CELL_SIZE + CELL_SIZE/2, CELL_SIZE/2 + 2, 0, 2*Math.PI);
