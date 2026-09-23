@@ -54,7 +54,6 @@
     .btn-shoot { background: #0984e3; font-size: 20px; }
     .btn-mine { background: #9b59b6; font-size: 20px; } 
 
-    /* STYLE CHO BẢNG THÔNG BÁO CHIẾN THẮNG */
     #victory-banner {
       display: none; position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
       background: rgba(0, 0, 0, 0.9); padding: 30px 50px; border-radius: 15px; border: 4px solid #f1c40f;
@@ -102,20 +101,19 @@
   </div>
 
   <script>
-    // --- LOAD ÂM THANH ---
+    // --- ÂM THANH ĐÃ CHỈNH NHỎ ---
     const bgm = new Audio('/assets/bgm.mp3'); bgm.loop = true; bgm.volume = 0.5;
-    const sfxVictory = new Audio('/assets/victory.mp3');
-    const sfxBomb = new Audio('/assets/bomb.mp3');
-    const sfxLaser = new Audio('/assets/laser.mp3');
-    const sfxMine = new Audio('/assets/mine.mp3');
+    const sfxVictory = new Audio('/assets/victory.mp3'); sfxVictory.volume = 0.7;
+    const sfxBomb = new Audio('/assets/bomb.mp3'); sfxBomb.volume = 0.3;
+    const sfxLaser = new Audio('/assets/laser.mp3'); sfxLaser.volume = 0.3;
+    const sfxMine = new Audio('/assets/mine.mp3'); sfxMine.volume = 0.3;
 
-    // Hàm tiện ích để âm thanh không bị gián đoạn nếu nổ liên tục
     function playSound(audioEl) {
       audioEl.currentTime = 0;
       audioEl.play().catch(e => console.log("Trình duyệt chặn Audio"));
     }
 
-    // --- LOAD HÌNH ẢNH ---
+    // --- HÌNH ẢNH GAME ---
     const imgWall = new Image(); imgWall.src = '/assets/wall.png';
     const imgBrick = new Image(); imgBrick.src = '/assets/brick.png';
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
@@ -211,11 +209,10 @@
       gameState.explosions = [];
       gameState.lasers = [];
       
-      // RESET NHẠC VÀ BẢNG THÔNG BÁO
       document.getElementById('victory-banner').style.display = 'none';
       sfxVictory.pause();
       sfxVictory.currentTime = 0;
-      playSound(bgm); // Bật lại nhạc nền
+      playSound(bgm);
       
       updateHUD();                
     });
@@ -228,9 +225,8 @@
     socket.on('map_updated', (updatedMap) => { gameState.map = updatedMap; });
     socket.on('bomb_placed', (bomb) => { gameState.bombs.push(bomb); });
 
-    // SỰ KIỆN NỔ BOM
     socket.on('bomb_exploded', ({ bombId, explosionCells, updatedMap, players, mines }) => {
-      playSound(sfxBomb); // BẬT TIẾNG BOM
+      playSound(sfxBomb);
       gameState.bombs = gameState.bombs.filter(b => b.id !== bombId);
       gameState.map = updatedMap;
       gameState.players = players;
@@ -242,9 +238,8 @@
 
     socket.on('mine_placed', (mine) => { gameState.mines.push(mine); });
 
-    // SỰ KIỆN NỔ MÌN
     socket.on('mine_exploded', ({ explosionCells, players, mines }) => {
-      playSound(sfxMine); // BẬT TIẾNG MÌN
+      playSound(sfxMine);
       gameState.players = players;
       gameState.mines = mines;
       gameState.explosions = explosionCells;
@@ -252,9 +247,8 @@
       setTimeout(() => { gameState.explosions = []; }, 400);
     });
 
-    // SỰ KIỆN BẮN LAZE
     socket.on('laser_fired', ({ laserCells, direction, players }) => {
-      playSound(sfxLaser); // BẬT TIẾNG SÚNG
+      playSound(sfxLaser);
       gameState.players = players;
       gameState.lasers = laserCells;
       gameState.laserDir = direction;
@@ -262,11 +256,10 @@
       setTimeout(() => { gameState.lasers = []; }, 300); 
     });
 
-    // SỰ KIỆN KẾT THÚC TRẬN ĐẤU (CÓ NGƯỜI THẮNG)
     socket.on('game_over', ({ winnerId }) => {
-      bgm.pause(); // Tắt nhạc nền
+      bgm.pause();
       if (winnerId === socket.id) {
-        playSound(sfxVictory); // Bật nhạc chiến thắng nếu bạn là người trụ lại cuối
+        playSound(sfxVictory);
         document.getElementById('victory-banner').style.display = 'block';
       }
     });
@@ -288,9 +281,7 @@
     });
 
     function startGame() {
-      // BẮT ĐẦU CHƠI THÌ BẬT NHẠC NỀN (Yêu cầu click chuột thì trình duyệt mới cho phát tiếng)
       playSound(bgm);
-      
       document.getElementById('lobby').style.display = 'none';
       document.getElementById('game-container').style.display = 'flex';
       updateHUD();
