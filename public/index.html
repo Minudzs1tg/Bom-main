@@ -3,28 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Bomb It Multiplayer Web</title>
+  <title>Mèo Nổ Multiplayer Web</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
     
     body {
       margin: 0; 
-      background: #00cec9; /* Màu dự phòng nếu video lỗi */
+      /* CHỈNH SỬA: Thay nền bằng file GIF tĩnh trong CSS */
+      background: url('/assets/lobby-bg.gif') center/cover no-repeat fixed #00cec9;
       color: #fff; font-family: sans-serif;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-height: 100vh; overflow: hidden;
-    }
-
-    /* CSS ĐỂ CHẠY VIDEO FULL MÀN HÌNH CHÌM XUỐNG DƯỚI CÙNG */
-    #bg-video {
-      position: fixed;
-      right: 0;
-      bottom: 0;
-      min-width: 100%;
-      min-height: 100%;
-      z-index: -1;
-      object-fit: cover;
     }
     
     #lobby { 
@@ -96,13 +86,9 @@
 </head>
 <body>
 
-  <!-- THẺ VIDEO MP4 ĐƯỢC THÊM VÀO ĐÂY (muted để tự động phát trên mọi trình duyệt) -->
-  <video id="bg-video" autoplay loop muted playsinline>
-    <source src="/assets/lobby-bg.mp4" type="video/mp4">
-  </video>
-
   <div id="lobby">
-    <h2>🎮 BOMB IT WEB 🎮</h2>
+    <!-- CHỈNH SỬA: Đổi tên game thành Mèo nổ -->
+    <h2>🎮 Mèo nổ 🎮</h2>
     <div id="room-selection">
       <button class="lobby-btn btn-create" onclick="createRoom()">Tạo Phòng Mới</button>
       <div style="margin: 20px 0; font-size: 14px; color: #aaa;">HOẶC</div>
