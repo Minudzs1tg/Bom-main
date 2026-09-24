@@ -7,52 +7,85 @@
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
+    
     body {
-      margin: 0; background: #222; color: #fff; font-family: sans-serif;
+      margin: 0; 
+      background: #00cec9; /* Màu dự phòng nếu video lỗi */
+      color: #fff; font-family: sans-serif;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-height: 100vh; overflow: hidden;
     }
+
+    /* CSS ĐỂ CHẠY VIDEO FULL MÀN HÌNH CHÌM XUỐNG DƯỚI CÙNG */
+    #bg-video {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      min-width: 100%;
+      min-height: 100%;
+      z-index: -1;
+      object-fit: cover;
+    }
     
-    #lobby { text-align: center; background: #333; padding: 30px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+    #lobby { 
+      text-align: center; 
+      background: rgba(30, 39, 46, 0.85); 
+      padding: 30px; border-radius: 12px; 
+      box-shadow: 0 10px 30px rgba(0, 206, 201, 0.4); 
+      border: 2px solid #00cec9;
+      backdrop-filter: blur(5px);
+    }
+    
     .lobby-btn { padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; margin: 10px 0; width: 100%; transition: 0.2s;}
-    .btn-create { background: #e74c3c; color: white; }
-    .btn-create:hover { background: #c0392b; }
-    .btn-join { background: #0984e3; color: white; }
-    .btn-join:hover { background: #74b9ff; }
-    #room-input { padding: 12px; font-size: 16px; border-radius: 8px; border: none; width: 100%; text-align: center; text-transform: uppercase; margin-bottom: 10px;}
+    
+    .btn-create { background: #00cec9; color: #fff; }
+    .btn-create:hover { background: #01a3a4; }
+    .btn-join { background: #1abc9c; color: #fff; }
+    .btn-join:hover { background: #16a085; }
+    
+    #room-input { 
+      padding: 12px; font-size: 16px; border-radius: 8px; border: 2px solid #00cec9; 
+      background: rgba(255, 255, 255, 0.9); width: 100%; text-align: center; text-transform: uppercase; margin-bottom: 10px;
+      outline: none;
+    }
+    #room-input:focus { box-shadow: 0 0 10px #00cec9; }
     
     #room-info { display: none; }
-    #room-info img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; }
+    #room-info img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; border: 3px solid #00cec9;}
 
-    #game-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 600px; }
+    #game-container { 
+      display: none; flex-direction: column; align-items: center; width: 100%; max-width: 600px;
+      background: rgba(0, 0, 0, 0.7); padding: 15px; border-radius: 12px; backdrop-filter: blur(5px);
+    }
     
     #hud {
       display: flex; width: 100%; justify-content: space-between; align-items: center;
-      background: #444; padding: 10px 15px; border-radius: 8px; margin-bottom: 10px;
-      font-size: 15px; font-weight: bold; border: 3px solid #333;
+      background: rgba(30, 39, 46, 0.9); padding: 10px 15px; border-radius: 8px; margin-bottom: 10px;
+      font-size: 15px; font-weight: bold; border: 2px solid #00cec9; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     }
     #hud-stats { display: flex; gap: 8px; }
     .buff-count { font-size: 12px; color: #55efc4; margin-left: 2px; }
-    #hud-room-code { font-size: 12px; color: #f1c40f; text-align: center; }
+    #hud-room-code { font-size: 12px; color: #00cec9; text-align: center; }
     
     .btn-restart {
-      background: #00b894; color: white; border: none; padding: 6px 10px;
+      background: #00cec9; color: white; border: none; padding: 6px 10px;
       border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;
     }
-    .btn-restart:active { background: #00cec9; }
+    .btn-restart:active { background: #01a3a4; }
     
-    canvas { border: 4px solid #333; border-radius: 8px; max-width: 90vw; }
+    canvas { border: 4px solid #00cec9; border-radius: 8px; max-width: 90vw; background: #222; }
     
     .controls { display: grid; grid-template-columns: repeat(4, 50px); grid-gap: 8px; margin-top: 10px; justify-content: center; }
     .btn {
-      width: 50px; height: 50px; background: #444; border: none; border-radius: 10px;
-      color: #fff; font-size: 18px; font-weight: bold; display: flex; align-items: center;
+      width: 50px; height: 50px; background: rgba(30, 39, 46, 0.9); border: 2px solid #00cec9; border-radius: 10px;
+      color: #00cec9; font-size: 18px; font-weight: bold; display: flex; align-items: center;
       justify-content: center; user-select: none; cursor: pointer;
     }
-    .btn:active { background: #666; }
-    .btn-bomb { background: #e74c3c; grid-column: 2; }
-    .btn-shoot { background: #0984e3; font-size: 20px; }
-    .btn-mine { background: #9b59b6; font-size: 20px; } 
+    .btn:active { background: #00cec9; color: #fff; }
+    .btn-bomb { background: #e74c3c; color: white; border-color: #c0392b; }
+    .btn-bomb:active { background: #c0392b; }
+    .btn-shoot { background: #0984e3; color: white; border-color: #0984e3; font-size: 20px; }
+    .btn-mine { background: #9b59b6; color: white; border-color: #9b59b6; font-size: 20px; } 
 
     #victory-banner {
       display: none; position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
@@ -63,6 +96,11 @@
 </head>
 <body>
 
+  <!-- THẺ VIDEO MP4 ĐƯỢC THÊM VÀO ĐÂY (muted để tự động phát trên mọi trình duyệt) -->
+  <video id="bg-video" autoplay loop muted playsinline>
+    <source src="/assets/lobby-bg.mp4" type="video/mp4">
+  </video>
+
   <div id="lobby">
     <h2>🎮 BOMB IT WEB 🎮</h2>
     <div id="room-selection">
@@ -72,7 +110,7 @@
       <button class="lobby-btn btn-join" onclick="joinRoom()">Vào Phòng</button>
     </div>
     <div id="room-info">
-      <p>Mã Phòng: <span id="room-display" style="font-weight: bold; color: #f1c40f; font-size: 24px;"></span></p>
+      <p>Mã Phòng: <span id="room-display" style="font-weight: bold; color: #00cec9; font-size: 24px;"></span></p>
       <img id="qr-img" alt="QR Code" />
       <p style="font-size: 12px; color: #bbb;">Gửi mã này cho bạn bè hoặc quét QR</p>
       <button class="lobby-btn btn-join" onclick="startGame()">▶ Bắt Đầu Ngay</button>
@@ -166,7 +204,6 @@
     const ctx = canvas.getContext('2d');
     const CELL_SIZE = 40;
 
-    // TỐI ƯU 1: Biến lưu trữ Canvas nền để không phải vẽ lại cỏ mỗi khung hình
     const bgCanvas = document.createElement('canvas');
     bgCanvas.width = 600; 
     bgCanvas.height = 520;
@@ -279,7 +316,7 @@
           playSound(sfxVictory);
           banner.className = 'win-border';
           title.innerHTML = '🎉 VICTORY! 🎉';
-          title.style.color = '#f1c40f';
+          title.style.color = '#00cec9';
           subtitle.innerHTML = 'Bạn là người sống sót cuối cùng!';
         } else {
           banner.className = 'lose-border';
@@ -296,11 +333,10 @@
       }
     });
 
-    // TỐI ƯU 2: Bộ lọc chống spam phím khi đè nút di chuyển
     let lastMoveTime = 0;
     function sendMove(dir) { 
       const now = Date.now();
-      if (now - lastMoveTime < 80) return; // Chỉ cho phép di chuyển tối đa ~12 lần/giây
+      if (now - lastMoveTime < 80) return; 
       lastMoveTime = now;
       socket.emit('move', { roomId, dir }); 
     }
@@ -372,7 +408,6 @@
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // TỐI ƯU 3: Chỉ vẽ background cỏ đúng 1 lần duy nhất vào bộ nhớ tạm
       if (!isBgRendered && imgGrass.complete) {
         for (let r = 0; r < 13; r++) {
           for (let c = 0; c < 15; c++) {
@@ -382,7 +417,6 @@
         isBgRendered = true;
       }
 
-      // Đổ nền cỏ lên màn hình (chỉ 1 lệnh vẽ thay vì 195 lệnh)
       if (isBgRendered) {
         ctx.drawImage(bgCanvas, 0, 0);
       } else {
@@ -393,7 +427,6 @@
       for (let r = 0; r < gameState.map.length; r++) {
         for (let c = 0; c < gameState.map[r].length; c++) {
           const tile = gameState.map[r][c];
-          // Bỏ hàm vẽ imgGrass ở đây để tiết kiệm tài nguyên
           
           if (tile === 1) drawSafe(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 2) drawSafe(imgBrick, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
