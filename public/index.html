@@ -54,11 +54,18 @@
     .btn-shoot { background: #0984e3; font-size: 20px; }
     .btn-mine { background: #9b59b6; font-size: 20px; } 
 
-    #victory-banner {
-      display: none; position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.9); padding: 30px 50px; border-radius: 15px; border: 4px solid #f1c40f;
-      text-align: center; font-size: 24px; color: #f1c40f; z-index: 100;
+    /* CẬP NHẬT: GIAO DIỆN BẢNG THÔNG BÁO ENDGAME */
+    #endgame-banner {
+      display: none; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95); padding: 30px 50px; border-radius: 15px; border: 4px solid #fff;
+      text-align: center; z-index: 100; box-shadow: 0 15px 35px rgba(0,0,0,0.8); min-width: 320px;
     }
+    #endgame-title { margin: 0 0 15px 0; font-size: 36px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
+    #endgame-img { width: 80px; height: 80px; image-rendering: pixelated; margin: 10px 0; padding-bottom: 15px; border-bottom: 2px solid #555; }
+    #endgame-subtitle { margin: 0; font-size: 16px; color: #ddd; font-weight: bold;}
+    
+    .win-border { border-color: #f1c40f !important; }
+    .lose-border { border-color: #e74c3c !important; }
   </style>
 </head>
 <body>
@@ -80,7 +87,13 @@
   </div>
 
   <div id="game-container">
-    <div id="victory-banner">🎉 BẠN ĐÃ CHIẾN THẮNG! 🎉</div>
+    <!-- CẬP NHẬT: BẢNG KẾT QUẢ ĐỘNG (VICTORY / DEFEAT) -->
+    <div id="endgame-banner">
+      <div id="endgame-title"></div>
+      <img id="endgame-img" src="" alt="Winner" />
+      <div id="endgame-subtitle"></div>
+    </div>
+    
     <div id="hud">
       <div id="hud-stats"></div>
       <div id="hud-room-code">Phòng:<br><span id="hud-room-id"></span></div>
@@ -101,7 +114,6 @@
   </div>
 
   <script>
-    // --- ÂM THANH ĐÃ CHỈNH NHỎ ---
     const bgm = new Audio('/assets/bgm.mp3'); bgm.loop = true; bgm.volume = 0.5;
     const sfxVictory = new Audio('/assets/victory.mp3'); sfxVictory.volume = 0.7;
     const sfxBomb = new Audio('/assets/bomb.mp3'); sfxBomb.volume = 0.3;
@@ -113,7 +125,6 @@
       audioEl.play().catch(e => console.log("Trình duyệt chặn Audio"));
     }
 
-    // --- HÌNH ẢNH GAME ---
     const imgWall = new Image(); imgWall.src = '/assets/wall.png';
     const imgBrick = new Image(); imgBrick.src = '/assets/brick.png';
     const imgBomb = new Image(); imgBomb.src = '/assets/bomb.png';
@@ -209,7 +220,8 @@
       gameState.explosions = [];
       gameState.lasers = [];
       
-      document.getElementById('victory-banner').style.display = 'none';
+      // Đóng bảng endgame
+      document.getElementById('endgame-banner').style.display = 'none';
       sfxVictory.pause();
       sfxVictory.currentTime = 0;
       playSound(bgm);
@@ -256,11 +268,40 @@
       setTimeout(() => { gameState.lasers = []; }, 300); 
     });
 
+    // CẬP NHẬT: XỬ LÝ VICTORY / DEFEAT DỰA TRÊN NGƯỜI THẮNG CUỐI CÙNG
     socket.on('game_over', ({ winnerId }) => {
       bgm.pause();
-      if (winnerId === socket.id) {
-        playSound(sfxVictory);
-        document.getElementById('victory-banner').style.display = 'block';
+      const banner = document.getElementById('endgame-banner');
+      const title = document.getElementById('endgame-title');
+      const img = document.getElementById('endgame-img');
+      const subtitle = document.getElementById('endgame-subtitle');
+      
+      banner.style.display = 'block';
+
+      if (winnerId && gameState.players[winnerId]) {
+        const winner = gameState.players[winnerId];
+        // Lấy ảnh của kẻ chiến thắng gán vào khung
+        img.src = '/assets/player' + winner.playerNumber + '.png';
+        img.style.display = 'inline-block';
+
+        if (winnerId === socket.id) {
+          playSound(sfxVictory);
+          banner.className = 'win-border';
+          title.innerHTML = '🎉 VICTORY! 🎉';
+          title.style.color = '#f1c40f';
+          subtitle.innerHTML = 'Bạn là người sống sót cuối cùng!';
+        } else {
+          banner.className = 'lose-border';
+          title.innerHTML = '💀 DEFEAT! 💀';
+          title.style.color = '#e74c3c';
+          subtitle.innerHTML = `Kẻ chiến thắng là Player ${winner.playerNumber}`;
+        }
+      } else {
+        banner.className = 'win-border';
+        title.innerHTML = '🤝 HÒA NHAU 🤝';
+        title.style.color = '#fff';
+        img.style.display = 'none';
+        subtitle.innerHTML = 'Không còn ai sống sót...';
       }
     });
 
