@@ -10,13 +10,13 @@
     
     body {
       margin: 0; 
-      /* CHỈNH SỬA: Thay nền bằng file GIF tĩnh trong CSS */
       background: url('/assets/lobby-bg.gif') center/cover no-repeat fixed #00cec9;
       color: #fff; font-family: sans-serif;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-height: 100vh; overflow: hidden;
     }
     
+    /* CHỈNH SỬA: Đưa khung sảnh sang mép phải màn hình máy tính */
     #lobby { 
       text-align: center; 
       background: rgba(30, 39, 46, 0.85); 
@@ -24,6 +24,23 @@
       box-shadow: 0 10px 30px rgba(0, 206, 201, 0.4); 
       border: 2px solid #00cec9;
       backdrop-filter: blur(5px);
+      
+      position: absolute;
+      right: 10%;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 350px;
+      max-width: 90vw;
+    }
+
+    /* CHỈNH SỬA: Trên điện thoại, đẩy khung xuống dưới cùng để tránh che mèo */
+    @media (max-width: 768px) {
+      #lobby {
+        right: 50%;
+        top: auto;
+        bottom: 5%;
+        transform: translateX(50%);
+      }
     }
     
     .lobby-btn { padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; margin: 10px 0; width: 100%; transition: 0.2s;}
@@ -43,9 +60,11 @@
     #room-info { display: none; }
     #room-info img { width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; border: 3px solid #00cec9;}
 
+    /* Khung game vẫn giữ nguyên vị trí giữa màn hình */
     #game-container { 
       display: none; flex-direction: column; align-items: center; width: 100%; max-width: 600px;
       background: rgba(0, 0, 0, 0.7); padding: 15px; border-radius: 12px; backdrop-filter: blur(5px);
+      z-index: 10;
     }
     
     #hud {
@@ -87,7 +106,6 @@
 <body>
 
   <div id="lobby">
-    <!-- CHỈNH SỬA: Đổi tên game thành Mèo nổ -->
     <h2>🎮 Mèo nổ 🎮</h2>
     <div id="room-selection">
       <button class="lobby-btn btn-create" onclick="createRoom()">Tạo Phòng Mới</button>
