@@ -54,18 +54,11 @@
     .btn-shoot { background: #0984e3; font-size: 20px; }
     .btn-mine { background: #9b59b6; font-size: 20px; } 
 
-    /* CẬP NHẬT: GIAO DIỆN BẢNG THÔNG BÁO ENDGAME */
-    #endgame-banner {
-      display: none; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.95); padding: 30px 50px; border-radius: 15px; border: 4px solid #fff;
-      text-align: center; z-index: 100; box-shadow: 0 15px 35px rgba(0,0,0,0.8); min-width: 320px;
+    #victory-banner {
+      display: none; position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9); padding: 30px 50px; border-radius: 15px; border: 4px solid #f1c40f;
+      text-align: center; font-size: 24px; color: #f1c40f; z-index: 100;
     }
-    #endgame-title { margin: 0 0 15px 0; font-size: 36px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
-    #endgame-img { width: 80px; height: 80px; image-rendering: pixelated; margin: 10px 0; padding-bottom: 15px; border-bottom: 2px solid #555; }
-    #endgame-subtitle { margin: 0; font-size: 16px; color: #ddd; font-weight: bold;}
-    
-    .win-border { border-color: #f1c40f !important; }
-    .lose-border { border-color: #e74c3c !important; }
   </style>
 </head>
 <body>
@@ -87,13 +80,7 @@
   </div>
 
   <div id="game-container">
-    <!-- CẬP NHẬT: BẢNG KẾT QUẢ ĐỘNG (VICTORY / DEFEAT) -->
-    <div id="endgame-banner">
-      <div id="endgame-title"></div>
-      <img id="endgame-img" src="" alt="Winner" />
-      <div id="endgame-subtitle"></div>
-    </div>
-    
+    <div id="victory-banner">🎉 BẠN ĐÃ CHIẾN THẮNG! 🎉</div>
     <div id="hud">
       <div id="hud-stats"></div>
       <div id="hud-room-code">Phòng:<br><span id="hud-room-id"></span></div>
@@ -179,6 +166,13 @@
     const ctx = canvas.getContext('2d');
     const CELL_SIZE = 40;
 
+    // TỐI ƯU 1: Biến lưu trữ Canvas nền để không phải vẽ lại cỏ mỗi khung hình
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.width = 600; 
+    bgCanvas.height = 520;
+    const bgCtx = bgCanvas.getContext('2d');
+    let isBgRendered = false;
+
     let gameState = { map: [], players: {}, bombs: [], explosions: [], lasers: [], mines: [], laserDir: 'down' };
 
     function updateHUD() {
@@ -220,7 +214,6 @@
       gameState.explosions = [];
       gameState.lasers = [];
       
-      // Đóng bảng endgame
       document.getElementById('endgame-banner').style.display = 'none';
       sfxVictory.pause();
       sfxVictory.currentTime = 0;
@@ -268,7 +261,6 @@
       setTimeout(() => { gameState.lasers = []; }, 300); 
     });
 
-    // CẬP NHẬT: XỬ LÝ VICTORY / DEFEAT DỰA TRÊN NGƯỜI THẮNG CUỐI CÙNG
     socket.on('game_over', ({ winnerId }) => {
       bgm.pause();
       const banner = document.getElementById('endgame-banner');
@@ -280,7 +272,6 @@
 
       if (winnerId && gameState.players[winnerId]) {
         const winner = gameState.players[winnerId];
-        // Lấy ảnh của kẻ chiến thắng gán vào khung
         img.src = '/assets/player' + winner.playerNumber + '.png';
         img.style.display = 'inline-block';
 
@@ -305,7 +296,15 @@
       }
     });
 
-    function sendMove(dir) { socket.emit('move', { roomId, dir }); }
+    // TỐI ƯU 2: Bộ lọc chống spam phím khi đè nút di chuyển
+    let lastMoveTime = 0;
+    function sendMove(dir) { 
+      const now = Date.now();
+      if (now - lastMoveTime < 80) return; // Chỉ cho phép di chuyển tối đa ~12 lần/giây
+      lastMoveTime = now;
+      socket.emit('move', { roomId, dir }); 
+    }
+
     function sendBomb() { socket.emit('place_bomb', { roomId }); }
     function sendShoot() { socket.emit('shoot_gun', { roomId }); } 
     function sendMine() { socket.emit('place_mine', { roomId }); } 
@@ -334,8 +333,7 @@
         ctx.drawImage(img, x, y, w, h);
       } else {
         let color = '#e84118';
-        if (img === imgGrass) color = '#78e08f';
-        else if (img === imgItemGun) color = '#00cec9';
+        if (img === imgItemGun) color = '#00cec9';
         else if (img === imgItemMine || img === imgTrapMine) color = '#9b59b6';
         else if (img === imgItemShield) color = '#3498db'; 
         
@@ -374,11 +372,28 @@
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // TỐI ƯU 3: Chỉ vẽ background cỏ đúng 1 lần duy nhất vào bộ nhớ tạm
+      if (!isBgRendered && imgGrass.complete) {
+        for (let r = 0; r < 13; r++) {
+          for (let c = 0; c < 15; c++) {
+            bgCtx.drawImage(imgGrass, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          }
+        }
+        isBgRendered = true;
+      }
+
+      // Đổ nền cỏ lên màn hình (chỉ 1 lệnh vẽ thay vì 195 lệnh)
+      if (isBgRendered) {
+        ctx.drawImage(bgCanvas, 0, 0);
+      } else {
+        ctx.fillStyle = '#78e08f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
       for (let r = 0; r < gameState.map.length; r++) {
         for (let c = 0; c < gameState.map[r].length; c++) {
           const tile = gameState.map[r][c];
-          
-          drawSafe(imgGrass, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          // Bỏ hàm vẽ imgGrass ở đây để tiết kiệm tài nguyên
           
           if (tile === 1) drawSafe(imgWall, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           else if (tile === 2) drawSafe(imgBrick, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
