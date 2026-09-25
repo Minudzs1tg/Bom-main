@@ -49,7 +49,6 @@ function checkWin(roomId) {
       const winnerId = alivePlayers.length === 1 ? alivePlayers[0].id : null;
       io.to(roomId).emit('game_over', { winnerId });
       
-      // Dừng thả đồ khi game kết thúc
       if (room.itemDropInterval) {
         clearInterval(room.itemDropInterval);
         room.itemDropInterval = null;
@@ -68,7 +67,6 @@ io.on('connection', (socket) => {
     socket.join(roomId);
 
     if (!rooms[roomId]) {
-      // THÊM: Biến itemDropInterval để quản lý việc thả đồ mỗi 12s
       rooms[roomId] = { id: roomId, map: createMap(), players: {}, bombs: [], mines: [], isGameOver: false, itemDropInterval: null };
     }
 
@@ -127,7 +125,6 @@ io.on('connection', (socket) => {
     room.mines = [];
     room.isGameOver = false; 
     
-    // THÊM: Xóa bộ đếm thả đồ khi khởi động lại
     if (room.itemDropInterval) {
       clearInterval(room.itemDropInterval);
       room.itemDropInterval = null;
@@ -346,7 +343,6 @@ io.on('connection', (socket) => {
       });
       checkWin(roomId); 
 
-      // --- TÍNH NĂNG MỚI: SUDDEN DEATH (THẢ ĐỒ MỖI 12S KHI HẾT GẠCH) ---
       let hasBlocks = false;
       for (let r = 0; r < room.map.length; r++) {
         if (room.map[r].includes(2)) {
@@ -363,7 +359,6 @@ io.on('connection', (socket) => {
             return;
           }
 
-          // Lọc ra danh sách các ô cỏ hoàn toàn trống
           const emptyCells = [];
           for (let r = 0; r < room.map.length; r++) {
             for (let c = 0; c < room.map[r].length; c++) {
@@ -377,18 +372,17 @@ io.on('connection', (socket) => {
             }
           }
 
-          // Nếu còn chỗ trống thì thả ngẫu nhiên vật phẩm (Bỏ qua 7 - Khiên)
           if (emptyCells.length > 0) {
             const randCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-            const items = [3, 4, 5, 6]; // Chỉ rớt Bom, Lửa, Súng Điện, Cá Bom
+            // CẬP NHẬT: Tăng số lượng item 5 (Súng điện) lên để tăng 300% tỉ lệ rơi
+            const items = [3, 4, 5, 5, 5, 6]; 
             const randomItem = items[Math.floor(Math.random() * items.length)];
             
             room.map[randCell.r][randCell.c] = randomItem;
             io.to(roomId).emit('map_updated', room.map);
           }
-        }, 12000); // 12 giây / lần
+        }, 12000); 
       }
-      // -------------------------------------------------------------
 
     }, 2500);
   });
@@ -400,7 +394,6 @@ io.on('connection', (socket) => {
         io.to(rId).emit('player_left', socket.id);
         checkWin(rId); 
         
-        // Dọn dẹp bộ nhớ nếu phòng trống hoàn toàn
         if (Object.keys(rooms[rId].players).length === 0) {
           if (rooms[rId].itemDropInterval) {
             clearInterval(rooms[rId].itemDropInterval);
