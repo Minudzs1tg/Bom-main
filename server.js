@@ -37,18 +37,23 @@ const SPAWN_POINTS = [
   { x: 1, y: 11, color: '#f1c40f' }   
 ];
 
-// HÀM KIỂM TRA ĐIỀU KIỆN CHIẾN THẮNG
 function checkWin(roomId) {
   const room = rooms[roomId];
   if (!room || room.isGameOver) return;
   
   const players = Object.values(room.players);
-  if (players.length > 1) { // Chỉ tính thắng thua khi có từ 2 người chơi trở lên
+  if (players.length > 1) { 
     const alivePlayers = players.filter(p => p.alive);
     if (alivePlayers.length <= 1) {
       room.isGameOver = true;
       const winnerId = alivePlayers.length === 1 ? alivePlayers[0].id : null;
       io.to(roomId).emit('game_over', { winnerId });
+      
+      // Dừng thả đồ khi game kết thúc
+      if (room.itemDropInterval) {
+        clearInterval(room.itemDropInterval);
+        room.itemDropInterval = null;
+      }
     }
   }
 }
@@ -63,7 +68,8 @@ io.on('connection', (socket) => {
     socket.join(roomId);
 
     if (!rooms[roomId]) {
-      rooms[roomId] = { id: roomId, map: createMap(), players: {}, bombs: [], mines: [], isGameOver: false };
+      // THÊM: Biến itemDropInterval để quản lý việc thả đồ mỗi 12s
+      rooms[roomId] = { id: roomId, map: createMap(), players: {}, bombs: [], mines: [], isGameOver: false, itemDropInterval: null };
     }
 
     const room = rooms[roomId];
@@ -119,7 +125,13 @@ io.on('connection', (socket) => {
     room.map = createMap();
     room.bombs = [];
     room.mines = [];
-    room.isGameOver = false; // Đặt lại trạng thái game
+    room.isGameOver = false; 
+    
+    // THÊM: Xóa bộ đếm thả đồ khi khởi động lại
+    if (room.itemDropInterval) {
+      clearInterval(room.itemDropInterval);
+      room.itemDropInterval = null;
+    }
     
     Object.values(room.players).forEach(p => {
       p.x = p.startX;
@@ -189,7 +201,7 @@ io.on('connection', (socket) => {
            players: room.players,
            mines: room.mines
         });
-        checkWin(roomId); // Kiểm tra thắng thua sau khi nổ mìn
+        checkWin(roomId); 
       } else {
         io.to(roomId).emit('player_updated', p);
       }
@@ -258,7 +270,7 @@ io.on('connection', (socket) => {
       direction: p.facingDir,
       players: room.players
     });
-    checkWin(roomId); // Kiểm tra thắng thua sau khi bắn
+    checkWin(roomId); 
   });
 
   socket.on('place_bomb', ({ roomId }) => {
@@ -332,7 +344,52 @@ io.on('connection', (socket) => {
         players: room.players,
         mines: room.mines 
       });
-      checkWin(roomId); // Kiểm tra thắng thua sau khi bom nổ
+      checkWin(roomId); 
+
+      // --- TÍNH NĂNG MỚI: SUDDEN DEATH (THẢ ĐỒ MỖI 12S KHI HẾT GẠCH) ---
+      let hasBlocks = false;
+      for (let r = 0; r < room.map.length; r++) {
+        if (room.map[r].includes(2)) {
+          hasBlocks = true;
+          break;
+        }
+      }
+
+      if (!hasBlocks && !room.itemDropInterval && !room.isGameOver) {
+        room.itemDropInterval = setInterval(() => {
+          if (room.isGameOver) {
+            clearInterval(room.itemDropInterval);
+            room.itemDropInterval = null;
+            return;
+          }
+
+          // Lọc ra danh sách các ô cỏ hoàn toàn trống
+          const emptyCells = [];
+          for (let r = 0; r < room.map.length; r++) {
+            for (let c = 0; c < room.map[r].length; c++) {
+              const isPlayerHere = Object.values(room.players).some(p => p.alive && p.x === c && p.y === r);
+              const isBombHere = room.bombs.some(b => b.x === c && b.y === r);
+              const isMineHere = room.mines.some(m => m.x === c && m.y === r);
+
+              if (room.map[r][c] === 0 && !isPlayerHere && !isBombHere && !isMineHere) {
+                emptyCells.push({ r, c });
+              }
+            }
+          }
+
+          // Nếu còn chỗ trống thì thả ngẫu nhiên vật phẩm (Bỏ qua 7 - Khiên)
+          if (emptyCells.length > 0) {
+            const randCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            const items = [3, 4, 5, 6]; // Chỉ rớt Bom, Lửa, Súng Điện, Cá Bom
+            const randomItem = items[Math.floor(Math.random() * items.length)];
+            
+            room.map[randCell.r][randCell.c] = randomItem;
+            io.to(roomId).emit('map_updated', room.map);
+          }
+        }, 12000); // 12 giây / lần
+      }
+      // -------------------------------------------------------------
+
     }, 2500);
   });
 
@@ -341,7 +398,15 @@ io.on('connection', (socket) => {
       if (rooms[rId].players[socket.id]) {
         delete rooms[rId].players[socket.id];
         io.to(rId).emit('player_left', socket.id);
-        checkWin(rId); // Kẻ địch thoát giữa chừng cũng tính là mình thắng
+        checkWin(rId); 
+        
+        // Dọn dẹp bộ nhớ nếu phòng trống hoàn toàn
+        if (Object.keys(rooms[rId].players).length === 0) {
+          if (rooms[rId].itemDropInterval) {
+            clearInterval(rooms[rId].itemDropInterval);
+          }
+          delete rooms[rId];
+        }
       }
     }
   });
