@@ -100,6 +100,7 @@ io.on('connection', (socket) => {
         hasElectricGun: 0,
         hasMine: 0,
         hasShield: false, 
+        shieldExpiry: 0, // THÊM: Biến quản lý thời gian hết hạn của khiên
         facingDir: 'down'
       };
     }
@@ -142,6 +143,7 @@ io.on('connection', (socket) => {
       p.hasElectricGun = 0;
       p.hasMine = 0;
       p.hasShield = false;
+      p.shieldExpiry = 0;
       p.facingDir = 'down';
     });
 
@@ -171,7 +173,10 @@ io.on('connection', (socket) => {
         if (targetCell === 4) { p.bombPower = 2; p.fireBuffCharges = 3; }
         if (targetCell === 5) { p.hasElectricGun = 3; } 
         if (targetCell === 6) { p.hasMine = 3; } 
-        if (targetCell === 7) { p.hasShield = true; } 
+        if (targetCell === 7) { 
+          p.hasShield = true; 
+          p.shieldExpiry = Date.now() + 9999999; // Lượm item thì khiên không bao giờ hết hạn cho đến khi bị bắn
+        } 
         
         room.map[nextY][nextX] = 0; 
         io.to(roomId).emit('map_updated', room.map); 
@@ -189,7 +194,23 @@ io.on('connection', (socket) => {
           p.hasShield = false; 
         } else {
           p.lives--;
-          if (p.lives > 0) { p.x = p.startX; p.y = p.startY; } 
+          if (p.lives > 0) { 
+            p.x = p.startX; 
+            p.y = p.startY; 
+            
+            // CẤP KHIÊN HỒI SINH 3 GIÂY
+            p.hasShield = true;
+            p.shieldExpiry = Date.now() + 3000;
+            const pid = p.id;
+            setTimeout(() => {
+              // Chỉ thu hồi khiên nếu người chơi chưa ăn item khiên khác
+              if (rooms[roomId] && rooms[roomId].players[pid] && Date.now() >= rooms[roomId].players[pid].shieldExpiry - 100) {
+                rooms[roomId].players[pid].hasShield = false;
+                io.to(roomId).emit('player_updated', rooms[roomId].players[pid]);
+              }
+            }, 3000);
+
+          } 
           else { p.alive = false; }
         }
 
@@ -256,7 +277,22 @@ io.on('connection', (socket) => {
           target.hasShield = false; 
         } else {
           target.lives--;
-          if (target.lives > 0) { target.x = target.startX; target.y = target.startY; } 
+          if (target.lives > 0) { 
+            target.x = target.startX; 
+            target.y = target.startY; 
+
+            // CẤP KHIÊN HỒI SINH 3 GIÂY
+            target.hasShield = true;
+            target.shieldExpiry = Date.now() + 3000;
+            const tid = target.id;
+            setTimeout(() => {
+              if (rooms[roomId] && rooms[roomId].players[tid] && Date.now() >= rooms[roomId].players[tid].shieldExpiry - 100) {
+                rooms[roomId].players[tid].hasShield = false;
+                io.to(roomId).emit('player_updated', rooms[roomId].players[tid]);
+              }
+            }, 3000);
+
+          } 
           else { target.alive = false; }
         }
       }
@@ -328,7 +364,22 @@ io.on('connection', (socket) => {
             player.hasShield = false; 
           } else {
             player.lives--;
-            if (player.lives > 0) { player.x = player.startX; player.y = player.startY; } 
+            if (player.lives > 0) { 
+              player.x = player.startX; 
+              player.y = player.startY; 
+
+              // CẤP KHIÊN HỒI SINH 3 GIÂY
+              player.hasShield = true;
+              player.shieldExpiry = Date.now() + 3000;
+              const pid = player.id;
+              setTimeout(() => {
+                if (rooms[roomId] && rooms[roomId].players[pid] && Date.now() >= rooms[roomId].players[pid].shieldExpiry - 100) {
+                  rooms[roomId].players[pid].hasShield = false;
+                  io.to(roomId).emit('player_updated', rooms[roomId].players[pid]);
+                }
+              }, 3000);
+
+            } 
             else { player.alive = false; }
           }
         }
@@ -374,7 +425,6 @@ io.on('connection', (socket) => {
 
           if (emptyCells.length > 0) {
             const randCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-            // CẬP NHẬT: Tăng số lượng item 5 (Súng điện) lên để tăng 300% tỉ lệ rơi
             const items = [3, 4, 5, 5, 5, 6]; 
             const randomItem = items[Math.floor(Math.random() * items.length)];
             
